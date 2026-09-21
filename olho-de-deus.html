@@ -1,0 +1,1610 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Olho de Deus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+<style>
+  /* Estética fixa (preto + verde terminal) nos dois temas, por decisão de design. */
+  :root {
+    --bg:#000; --fg:#00ff9c; --dim:#0b8a55; --hi:#eafff6; --warn:#ff3b5c; --amber:#ffb020;
+    --panel:rgba(2,14,9,.94); --line:rgba(0,255,156,.35);
+    box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#000; --fg:#00ff9c; --dim:#0b8a55; --hi:#eafff6; --warn:#ff3b5c; --amber:#ffb020; } }
+  :root[data-theme="dark"] { --bg:#000; --fg:#00ff9c; --dim:#0b8a55; --hi:#eafff6; --warn:#ff3b5c; --amber:#ffb020; }
+  *,*::before,*::after { box-sizing:border-box; }
+  html { height:100%; background:#000; scroll-padding-top:env(safe-area-inset-top,0px); }
+  body { height:100%; margin:0; background:var(--bg); color:var(--fg); font-family:"Share Tech Mono","Courier New",monospace; overflow:hidden; -webkit-tap-highlight-color:transparent; }
+  [hidden] { display:none !important; }
+  body::after { content:""; position:fixed; inset:0; z-index:60; pointer-events:none; opacity:.12;
+    background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0,rgba(0,0,0,0) 2px,rgba(0,0,0,.9) 3px); }
+  button { min-height:44px; padding:10px 16px; background:transparent; color:var(--fg); border:1px solid var(--fg); font:inherit; font-size:13px; letter-spacing:.06em; cursor:pointer; }
+  button:hover { background:rgba(0,255,156,.12); }
+  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline:2px solid var(--hi); outline-offset:2px; }
+  button.quiet { color:var(--dim); border-color:var(--dim); }
+  button.pri { background:rgba(0,255,156,.16); }
+  button.danger { color:var(--warn); border-color:var(--warn); }
+  button.sm { min-height:36px; min-width:36px; padding:4px 10px; font-size:12px; }
+  input, textarea, select { background:#010805; color:var(--fg); border:1px solid var(--dim); font:inherit; font-size:16px; padding:8px 10px; width:100%; }
+  .grow { flex:1; }
+
+  /* ---------- BLOQUEIO ---------- */
+  #lock { position:fixed; inset:0; z-index:20; background:#000; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+    padding:calc(env(safe-area-inset-top,0px) + 16px) 20px calc(env(safe-area-inset-bottom,0px) + 16px); overflow:auto; }
+  #title { margin:0; font-family:"VT323","Share Tech Mono",monospace; font-weight:400; font-size:clamp(34px,9vw,52px); letter-spacing:.18em; text-shadow:0 0 10px rgba(0,255,156,.8),0 0 26px rgba(0,255,156,.4); }
+  #startBox, #scanBox { display:flex; flex-direction:column; align-items:center; gap:14px; width:100%; }
+  #startBox .note { max-width:420px; text-align:center; font-size:13px; line-height:1.55; color:var(--dim); margin:0; }
+  #sensor { position:relative; width:min(58vmin,280px); aspect-ratio:1; border-radius:50%; overflow:hidden; border:2px solid var(--fg); background:#020a06;
+    box-shadow:0 0 26px rgba(0,255,156,.35), inset 0 0 26px rgba(0,255,156,.25); flex:none; }
+  #cam, #ov { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
+  #cam { filter:grayscale(1) contrast(1.25) brightness(.85); }
+  #sensor::after { content:""; position:absolute; inset:0; pointer-events:none; background:rgba(0,255,156,.2); mix-blend-mode:screen; }
+  .sweep { position:absolute; left:0; right:0; top:0; height:3px; z-index:2; background:linear-gradient(90deg,transparent,#00ff9c,transparent); box-shadow:0 0 12px #00ff9c; animation:sweep 2.2s linear infinite; }
+  @keyframes sweep { from{top:0} to{top:100%} }
+  #hint { min-height:1.4em; font-size:13px; letter-spacing:.1em; color:var(--amber); text-align:center; }
+  #hint.ok { color:var(--fg); }
+  #log { width:min(92vw,420px); height:9.2em; overflow:hidden; text-align:left; font-size:13px; line-height:1.5; }
+  .ln { white-space:pre-wrap; word-break:break-word; }
+  .ln:last-child::after { content:"▌"; animation:blink 1s steps(2) infinite; }
+  .ln.dim{color:var(--dim)} .ln.bad{color:var(--warn)} .ln.ok{color:var(--hi);text-shadow:0 0 8px rgba(0,255,156,.8)}
+  #bar { width:min(92vw,420px); height:5px; border:1px solid var(--dim); }
+  #barfill { display:block; height:100%; width:0; background:var(--fg); box-shadow:0 0 10px var(--fg); transition:width .15s linear; }
+  #actions { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
+  @keyframes blink { 50%{opacity:0} }
+
+  /* ---------- OLHO ---------- */
+  #stage { position:fixed; inset:0; z-index:1; display:none; transition:opacity 1.4s; }
+  #stage.dim { opacity:.2; }
+  #welcome { position:fixed; left:0; right:0; z-index:3; padding:0 16px; text-align:center; font-family:"VT323","Share Tech Mono","Courier New",monospace;
+    font-size:clamp(24px,6.6vw,46px); letter-spacing:.1em; line-height:1.15; text-wrap:balance; opacity:0; pointer-events:none; transition:opacity .8s;
+    text-shadow:0 0 8px rgba(0,255,156,.9),0 0 24px rgba(0,255,156,.5); }
+  #welcome.on { opacity:1; }
+  #welcome.glitch { animation:glitch 4.5s infinite; }
+  .cur { animation:blink 1s steps(2) infinite; }
+  @keyframes glitch { 0%,91%,100%{transform:none} 92%{transform:translateX(-4px);text-shadow:3px 0 #ff2bd6,-3px 0 #00e5ff} 94%{transform:translateX(4px) skewX(-6deg);text-shadow:-3px 0 #ff2bd6,3px 0 #00e5ff} 96%{transform:translateX(-2px)} }
+
+  /* ---------- ÁREA DE TRABALHO ---------- */
+  #ws { position:fixed; inset:0; z-index:5; display:flex; flex-direction:column; opacity:0; pointer-events:none; transition:opacity 1.2s;
+    padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px); }
+  #ws.on { opacity:1; pointer-events:auto; }
+  #wsbar { display:flex; align-items:center; gap:10px; padding:6px 60px 6px 10px; border-bottom:1px solid var(--line); background:rgba(0,10,6,.88); flex:none; }
+  .brand { font-family:"VT323",monospace; font-size:24px; letter-spacing:.14em; text-shadow:0 0 8px rgba(0,255,156,.7); }
+  #tabs { display:flex; gap:6px; }
+  .tabbtn { min-height:38px; padding:6px 12px; border-color:var(--dim); color:var(--dim); }
+  .tabbtn[aria-selected="true"] { color:var(--fg); border-color:var(--fg); background:rgba(0,255,156,.12); }
+  #modeflag { font-size:11px; color:var(--amber); }
+  @media (max-width:640px){ .brand{display:none} #tabs{flex:1} .tabbtn{flex:1} }
+  #wsmain { flex:1; min-height:0; position:relative; }
+  .pane { position:absolute; inset:0; display:none; }
+  .pane.on { display:block; }
+  #icons { position:absolute; inset:0; overflow:auto; padding:16px; display:grid; grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:14px; align-content:start; }
+  .icon { display:flex; flex-direction:column; align-items:center; gap:4px; padding:12px 6px; min-height:112px; border:1px solid transparent; background:transparent; }
+  .icon:hover { border-color:var(--line); }
+  .icon .fold { width:64px; height:48px; filter:drop-shadow(0 0 6px rgba(0,255,156,.5)); }
+  .icon .ic-name { font-size:13px; text-align:center; word-break:break-word; }
+  .icon .ic-meta { font-size:11px; color:var(--dim); }
+  .icon.add { border:1px dashed var(--dim); color:var(--dim); justify-content:center; }
+  .icon .plus { font-size:34px; line-height:1; }
+  .icon.pop { animation:pop .5s cubic-bezier(.2,1.4,.4,1) both; }
+  @keyframes pop { 0%{opacity:0;transform:scale(.4) translateY(30px);filter:brightness(3)} 100%{opacity:1;transform:none} }
+  #winlayer { position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+  .win { position:absolute; width:min(500px,94%); height:min(440px,84%); display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--fg);
+    box-shadow:0 0 28px rgba(0,255,156,.2); pointer-events:auto; animation:winIn .28s ease-out; }
+  @keyframes winIn { from{opacity:0;transform:scale(.92)} to{opacity:1;transform:none} }
+  @media (max-width:759px){ .win{ inset:0 !important; width:auto !important; height:auto !important; } }
+  .wtitle { display:flex; align-items:center; gap:8px; padding:6px 8px 6px 12px; border-bottom:1px solid var(--line); touch-action:none; user-select:none; cursor:grab; flex:none; }
+  .wt { font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .wbar { display:flex; flex-wrap:wrap; gap:6px; padding:8px; border-bottom:1px dashed var(--line); flex:none; }
+  .wbody { flex:1; overflow:auto; padding:8px; min-height:0; }
+  .row { display:flex; align-items:center; gap:6px; border:1px solid transparent; }
+  .row:hover { border-color:var(--line); }
+  .rowmain { flex:1; min-width:0; display:flex; align-items:center; gap:10px; text-align:left; border:none; padding:6px; min-height:52px; }
+  .rt { display:flex; flex-direction:column; min-width:0; }
+  .nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .meta { font-size:11px; color:var(--dim); }
+  .gl { width:38px; height:38px; flex:none; border:1px solid var(--dim); display:grid; place-items:center; font-size:10px; color:var(--dim); overflow:hidden; }
+  .gl img { width:100%; height:100%; object-fit:cover; }
+  .ract { display:flex; gap:4px; flex:none; }
+  .empty { padding:24px 8px; color:var(--dim); text-align:center; font-size:13px; }
+  .ed { display:flex; flex-direction:column; gap:8px; height:100%; }
+  .ed textarea { flex:1; min-height:180px; resize:none; font-size:15px; line-height:1.5; }
+  .viewer { display:flex; flex-direction:column; align-items:center; gap:10px; }
+  .viewer img, .viewer video { max-width:100%; max-height:52vh; border:1px solid var(--line); background:#000; }
+  .viewer audio { width:100%; }
+
+  /* ---------- MAPA ---------- */
+  #tab-map.on { display:grid; grid-template-rows:minmax(0,1fr) minmax(0,44%); }
+  @media (min-width:900px){ #tab-map.on { grid-template-columns:minmax(0,1fr) 370px; grid-template-rows:minmax(0,1fr); } }
+  #mapwrap { position:relative; overflow:hidden; background:#000; min-height:0; }
+  #mapcv { position:absolute; inset:0; width:100%; height:100%; touch-action:none; cursor:grab; }
+  #mapctl { position:absolute; right:8px; top:8px; display:flex; flex-direction:column; gap:6px; }
+  #mapctl button { background:rgba(0,10,6,.8); min-width:44px; }
+  #maphint, #maperr { position:absolute; left:8px; right:64px; top:8px; padding:8px 10px; background:rgba(0,10,6,.9); border:1px solid var(--amber); color:var(--amber); font-size:12px; }
+  #maperr { top:auto; bottom:8px; right:8px; border-color:var(--dim); color:var(--dim); }
+  #mappanel { overflow:auto; padding:10px; border-top:1px solid var(--line); background:var(--panel); min-height:0; }
+  @media (min-width:900px){ #mappanel{ border-top:none; border-left:1px solid var(--line); } }
+  .phead { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .phead h2 { margin:0; font-family:"VT323",monospace; font-weight:400; font-size:24px; letter-spacing:.1em; flex:1; }
+  .loc { display:flex; align-items:center; gap:8px; width:100%; text-align:left; border:1px solid transparent; padding:6px 8px; min-height:46px; }
+  .loc:hover { border-color:var(--line); }
+  .loc .ln1 { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .loc .tm { font-variant-numeric:tabular-nums; color:var(--hi); }
+  .dn { width:10px; height:10px; border-radius:50%; flex:none; }
+  .dn.d { background:#ffd25a; box-shadow:0 0 8px #ffd25a; } .dn.n { background:#5aa9ff; box-shadow:0 0 8px #5aa9ff; } .dn.t { background:#ff8a5a; }
+  .bigclock { font-family:"VT323",monospace; font-size:clamp(48px,14vw,72px); line-height:1; text-shadow:0 0 12px rgba(0,255,156,.7); font-variant-numeric:tabular-nums; }
+  .kv { font-size:13px; line-height:1.7; color:var(--dim); }
+  .kv b { color:var(--fg); font-weight:400; }
+  .gal { display:grid; grid-template-columns:repeat(auto-fill,minmax(84px,1fr)); gap:6px; margin:8px 0; }
+  .th { position:relative; aspect-ratio:1; border:1px solid var(--line); overflow:hidden; padding:0; min-height:0; }
+  .th img, .th video { width:100%; height:100%; object-fit:cover; display:block; }
+  .th .pb { position:absolute; inset:auto 4px 4px auto; background:rgba(0,0,0,.7); padding:1px 5px; font-size:11px; }
+  .sect { margin:12px 0 4px; font-size:12px; letter-spacing:.14em; color:var(--dim); }
+  #lightbox { position:fixed; inset:0; z-index:40; background:rgba(0,0,0,.96); display:flex; flex-direction:column; padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px); }
+  #lightbox .lbtop { display:flex; gap:8px; align-items:center; padding:8px; flex-wrap:wrap; }
+  #lightbox .lbtop { padding-right:64px; }
+  #lightbox .lbmedia { flex:1; min-height:0; display:grid; place-items:center; padding:8px; }
+  #lightbox img, #lightbox video { max-width:100%; max-height:100%; }
+
+  /* ---------- GLOBAL ---------- */
+  #mute { position:fixed; top:calc(env(safe-area-inset-top,0px) + 6px); right:8px; z-index:50; min-width:44px; padding:6px 10px; background:rgba(0,10,6,.85); }
+  #modalRoot { position:fixed; inset:0; z-index:70; pointer-events:none; }
+  .mback { position:fixed; inset:0; background:rgba(0,0,0,.75); display:grid; place-items:center; padding:16px; pointer-events:auto; }
+  .mbox { width:min(440px,100%); max-height:88vh; overflow:auto; background:#020c08; border:1px solid var(--fg); padding:16px; display:flex; flex-direction:column; gap:12px; box-shadow:0 0 30px rgba(0,255,156,.25); }
+  .mtitle { font-size:14px; line-height:1.5; }
+  .mbtns { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
+  .mlist { display:flex; flex-direction:column; gap:6px; }
+  .mlist button { text-align:left; }
+  #toast { position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom,0px) + 18px); transform:translate(-50%,20px); z-index:80; background:#020c08; border:1px solid var(--fg);
+    padding:10px 14px; font-size:13px; opacity:0; pointer-events:none; transition:all .25s; max-width:90vw; text-align:center; }
+  #toast.on { opacity:1; transform:translate(-50%,0); }
+  @media (prefers-reduced-motion: reduce){ .sweep,.icon.pop,.win{ animation:none } }
+</style>
+</head>
+<body>
+
+<div id="lock">
+  <h1 id="title">OLHO DE DEUS</h1>
+  <div id="startBox">
+    <p class="note">O sistema usa a câmera frontal para reconhecer a região do seu olho. As imagens são analisadas no próprio aparelho, não são gravadas nem enviadas; só um código numérico do seu olho fica salvo neste navegador.</p>
+    <button id="startBtn" type="button" class="pri">Iniciar sistema</button>
+  </div>
+  <div id="scanBox" hidden>
+    <div id="sensor" aria-label="Sensor óptico">
+      <video id="cam" playsinline muted autoplay></video>
+      <canvas id="ov" width="300" height="300"></canvas>
+      <div class="sweep"></div>
+    </div>
+    <div id="hint" aria-live="polite"></div>
+    <div id="log" aria-live="polite"></div>
+    <div id="bar"><i id="barfill"></i></div>
+    <div id="actions" hidden>
+      <button id="retry" type="button">Tentar novamente</button>
+      <button id="usePin" type="button" hidden>Usar PIN</button>
+      <button id="tempMode" type="button" class="quiet" hidden>Modo sem câmera (dados temporários)</button>
+      <button id="wipe" type="button" class="quiet" hidden>Apagar cadastro e dados</button>
+    </div>
+  </div>
+</div>
+
+<canvas id="stage"></canvas>
+<div id="welcome" aria-live="polite"></div>
+
+<div id="ws">
+  <div id="wsbar">
+    <span class="brand">OLHO DE DEUS</span>
+    <div id="tabs" role="tablist">
+      <button class="tabbtn" role="tab" data-tab="folders" aria-selected="true" type="button">Pastas</button>
+      <button class="tabbtn" role="tab" data-tab="map" aria-selected="false" type="button">Mapa mundial</button>
+    </div>
+    <span class="grow"></span>
+    <span id="modeflag"></span>
+    <button id="btnSettings" class="sm" type="button" aria-label="Configurações">⚙</button>
+  </div>
+  <div id="wsmain">
+    <section id="tab-folders" class="pane on">
+      <div id="icons"></div>
+      <div id="winlayer"></div>
+    </section>
+    <section id="tab-map" class="pane">
+      <div id="mapwrap">
+        <canvas id="mapcv"></canvas>
+        <div id="mapctl">
+          <button id="zin" type="button" aria-label="Aproximar">+</button>
+          <button id="zout" type="button" aria-label="Afastar">−</button>
+          <button id="zreset" type="button" aria-label="Recentralizar">⌂</button>
+        </div>
+        <div id="maphint" hidden></div>
+        <div id="maperr" hidden></div>
+      </div>
+      <aside id="mappanel"></aside>
+    </section>
+  </div>
+</div>
+
+<button id="mute" type="button" aria-label="Som">♪</button>
+<div id="lightbox" hidden></div>
+<div id="modalRoot"></div>
+<div id="toast" role="status"></div>
+
+<script>
+(function () {
+'use strict';
+/* ===== utilidades ===== */
+const $ = (id) => document.getElementById(id);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const clamp = (x, l, h) => Math.max(l, Math.min(h, x));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+const ssGet = (k) => { try { return sessionStorage.getItem(k); } catch (e) { return null; } };
+const ssSet = (k, v) => { try { sessionStorage.setItem(k, v); } catch (e) {} };
+const ssDel = (k) => { try { sessionStorage.removeItem(k); } catch (e) {} };
+const p2 = (n) => String(n).padStart(2, '0');
+
+function append(e, c) {
+  if (c == null || c === false) return;
+  if (Array.isArray(c)) c.forEach((x) => append(e, x));
+  else e.append(c.nodeType ? c : document.createTextNode(String(c)));
+}
+function el(tag, props) {
+  const e = document.createElement(tag);
+  if (props) for (const k in props) {
+    const v = props[k];
+    if (v == null || v === false) continue;
+    if (k === 'class') e.className = v;
+    else if (k === 'text') e.textContent = v;
+    else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? '' : v);
+  }
+  for (let i = 2; i < arguments.length; i++) append(e, arguments[i]);
+  return e;
+}
+function fmtSize(n) { return n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(1) + ' MB'; }
+const extOf = (n) => (String(n).split('.').pop() || '').toLowerCase();
+const MIMES = { mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', m4v: 'video/mp4', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', ogg: 'audio/ogg', pdf: 'application/pdf' };
+
+/* ===== efeitos sonoros (Web Audio, tudo sintetizado: compressor + reverb) ===== */
+const Sfx = (function () {
+  let ctx = null, master = null, dry = null, wet = null, muted = lsGet('odd_muted') === '1', hum = null, scan = null, scanT = 0, nbuf = null, amb = 0;
+  const VOL = 0.75;
+  function init() {
+    try {
+      if (!ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        ctx = new AC();
+        master = ctx.createGain(); master.gain.value = muted ? 0 : VOL;
+        const comp = ctx.createDynamicsCompressor();
+        comp.threshold.value = -20; comp.knee.value = 18; comp.ratio.value = 4; comp.attack.value = 0.003; comp.release.value = 0.2;
+        master.connect(comp); comp.connect(ctx.destination);
+        dry = ctx.createGain(); dry.connect(master);
+        const len = Math.floor(ctx.sampleRate * 2.2), ir = ctx.createBuffer(2, len, ctx.sampleRate);
+        for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2); }
+        const conv = ctx.createConvolver(); conv.buffer = ir;
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4500;
+        wet = ctx.createGain(); wet.gain.value = 0.6; wet.connect(conv); conv.connect(lp); lp.connect(master);
+      }
+      if (ctx.state === 'suspended') ctx.resume();
+    } catch (e) { ctx = null; }
+  }
+  function setMuted(m) { muted = m; lsSet('odd_muted', m ? '1' : '0'); if (master) master.gain.setTargetAtTime(m ? 0 : VOL, ctx.currentTime, 0.03); }
+
+  // liga um nó à saída seca, ao reverb (o.wet) e ao painel estéreo (o.pan)
+  function out(node, o) {
+    let last = node;
+    if (o.pan && ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = o.pan; last.connect(p); last = p; }
+    last.connect(dry);
+    if (o.wet) { const s = ctx.createGain(); s.gain.value = o.wet; last.connect(s); s.connect(wet); }
+  }
+  function tone(f, d, o) {
+    if (!ctx) return; o = o || {};
+    const t = ctx.currentTime + (o.at || 0), osc = ctx.createOscillator(), g = ctx.createGain();
+    osc.type = o.type || 'sine'; osc.frequency.setValueAtTime(f, t); if (o.det) osc.detune.value = o.det;
+    if (o.to) osc.frequency.exponentialRampToValueAtTime(o.to, t + d);
+    const v = o.vol == null ? 0.15 : o.vol, att = o.att || Math.min(0.012, d / 3);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + att); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    let node = osc;
+    if (o.lp) { const f2 = ctx.createBiquadFilter(); f2.type = 'lowpass'; f2.frequency.value = o.lp; osc.connect(f2); node = f2; }
+    node.connect(g); out(g, o); osc.start(t); osc.stop(t + d + 0.05);
+  }
+  function noise(d, o) {
+    if (!ctx) return; o = o || {};
+    if (!nbuf) { nbuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate); const a = nbuf.getChannelData(0); for (let i = 0; i < a.length; i++) a[i] = Math.random() * 2 - 1; }
+    const t = ctx.currentTime + (o.at || 0), src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    src.buffer = nbuf; src.loop = true; f.type = o.ftype || 'bandpass'; f.frequency.setValueAtTime(o.f0 || 1000, t);
+    if (o.f1) f.frequency.exponentialRampToValueAtTime(o.f1, t + d); f.Q.value = o.q || 1.2;
+    const v = o.vol == null ? 0.1 : o.vol;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + (o.attack || Math.min(0.05, d / 3))); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    src.connect(f); f.connect(g); out(g, o); src.start(t, Math.random()); src.stop(t + d + 0.05);
+  }
+  const rp = () => (Math.random() * 2 - 1) * 0.7;
+  const S = {
+    key() { noise(0.025, { f0: 3800, f1: 1800, q: 3, vol: 0.05 }); tone(1100 + Math.random() * 500, 0.03, { type: 'square', vol: 0.02, lp: 4000, pan: rp() * 0.4 }); },
+    click() { noise(0.02, { f0: 4500, q: 2, vol: 0.05 }); tone(1500, 0.03, { type: 'triangle', vol: 0.06 }); },
+    tab() { tone(420, 0.09, { type: 'sine', vol: 0.09, to: 1250 }); noise(0.09, { f0: 800, f1: 3000, q: 1, vol: 0.04 }); },
+    boot() { [392, 523, 659, 784, 1046].forEach((f, i) => tone(f, 0.16, { type: 'triangle', vol: 0.09, at: i * 0.07, lp: 3200, wet: 0.35 })); tone(196, 0.9, { type: 'sine', vol: 0.09, at: 0.3, wet: 0.5 }); },
+    sample() { tone(1700 + Math.random() * 250, 0.06, { type: 'sine', vol: 0.05, wet: 0.2, pan: rp() }); },
+    ok() { tone(660, 0.09, { type: 'triangle', vol: 0.1, wet: 0.3 }); tone(990, 0.16, { type: 'triangle', vol: 0.1, at: 0.08, wet: 0.35 }); },
+    err() { tone(220, 0.26, { type: 'sawtooth', vol: 0.09, to: 110, lp: 1200 }); noise(0.12, { f0: 500, f1: 200, q: 1, vol: 0.06 }); },
+    ping() { tone(1320, 0.5, { vol: 0.09, wet: 0.5 }); tone(1980, 0.7, { vol: 0.05, at: 0.04, wet: 0.6 }); },
+    granted() {
+      [523, 659, 784, 1046, 1318].forEach((f, i) => tone(f, 0.45, { type: 'triangle', vol: 0.1, at: i * 0.09, lp: 4200, wet: 0.55, pan: (i - 2) * 0.25 }));
+      [130.8, 196, 261.6].forEach((f) => tone(f, 1.6, { type: 'sine', vol: 0.07, at: 0.1, att: 0.15, wet: 0.5 }));
+      noise(0.7, { f0: 2000, f1: 9000, q: 1.5, vol: 0.05, at: 0.35, wet: 0.5 });
+    },
+    denied() {
+      tone(150, 0.3, { type: 'sawtooth', vol: 0.12, to: 85, lp: 900 }); tone(150, 0.4, { type: 'sawtooth', vol: 0.12, to: 65, at: 0.34, lp: 800 });
+      tone(70, 0.5, { type: 'sine', vol: 0.2, to: 40 }); noise(0.15, { f0: 1500, f1: 300, q: 1, vol: 0.07 });
+    },
+    rise(d) {
+      d = d || 3.4;
+      noise(d, { f0: 150, f1: 6000, q: 2.5, vol: 0.13, attack: d * 0.85, wet: 0.3 });
+      [-9, 0, 9].forEach((c) => tone(55, d, { type: 'sawtooth', to: 440, vol: 0.035, det: c * 6, lp: 1600, att: d * 0.7 }));
+      for (let i = 0; i < 26; i++) { const at = Math.pow(Math.random(), 0.7) * d * 0.95; tone(800 + Math.random() * 2600, 0.03, { type: 'square', vol: 0.018 + 0.03 * (at / d), at: at, pan: rp(), wet: 0.3, lp: 5000 }); }
+    },
+    boom() {
+      tone(90, 1.7, { vol: 0.5, to: 28, wet: 0.5 }); noise(0.8, { ftype: 'lowpass', f0: 900, f1: 60, vol: 0.4, wet: 0.7 });
+      tone(880, 2.2, { vol: 0.035, att: 0.05, wet: 0.95 }); tone(1320, 2.2, { vol: 0.025, att: 0.05, wet: 0.95 });
+    },
+    glitch() {
+      for (let i = 0; i < 8; i++) tone(200 + Math.random() * 3800, 0.025, { type: 'square', vol: 0.04, at: i * 0.028, pan: rp(), lp: 5000 });
+      noise(0.16, { ftype: 'highpass', f0: 3000, q: 0.7, vol: 0.05 });
+    },
+    open() {
+      noise(0.28, { f0: 250, f1: 3200, q: 0.9, vol: 0.09, wet: 0.3 });
+      tone(784, 0.3, { type: 'triangle', vol: 0.07, at: 0.12, wet: 0.5, lp: 3500 }); tone(1175, 0.4, { type: 'triangle', vol: 0.06, at: 0.2, wet: 0.5, lp: 3500 });
+    },
+    close() { noise(0.2, { f0: 3200, f1: 250, q: 0.9, vol: 0.07 }); tone(700, 0.15, { type: 'triangle', vol: 0.06, to: 350, wet: 0.3 }); }
+  };
+  function humOn() {
+    if (!ctx || hum) return;
+    const t = ctx.currentTime, g = ctx.createGain(), lp = ctx.createBiquadFilter(), lfo = ctx.createOscillator(), lg = ctx.createGain();
+    const o1 = ctx.createOscillator(), o2 = ctx.createOscillator(), o3 = ctx.createOscillator();
+    o1.type = 'sawtooth'; o2.type = 'sawtooth'; o3.type = 'sine'; o1.frequency.value = 55; o2.frequency.value = 55.6; o3.frequency.value = 110;
+    lp.type = 'lowpass'; lp.frequency.value = 220; lfo.frequency.value = 0.12; lg.gain.value = 90; lfo.connect(lg); lg.connect(lp.frequency);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.05, t + 2.5);
+    o1.connect(lp); o2.connect(lp); lp.connect(g); o3.connect(g); out(g, { wet: 0.3 });
+    o1.start(); o2.start(); o3.start(); lfo.start(); hum = { g: g, nodes: [o1, o2, o3, lfo] };
+    amb = setInterval(() => { if (Math.random() < 0.55) tone(1200 + Math.random() * 2600, 0.04, { type: 'square', vol: 0.012, wet: 0.5, pan: rp(), lp: 5000 }); }, 900);
+  }
+  function humOff() {
+    clearInterval(amb); if (!hum || !ctx) return; const h = hum; hum = null;
+    h.g.gain.cancelScheduledValues(ctx.currentTime); h.g.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.4);
+    setTimeout(() => h.nodes.forEach((n) => { try { n.stop(); } catch (e) {} }), 2500);
+  }
+  function scanStart() {
+    if (!ctx || scan) return;
+    const o = ctx.createOscillator(), o2 = ctx.createOscillator(), g = ctx.createGain(), trem = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain();
+    o.frequency.value = 320; o2.frequency.value = 481; lfo.frequency.value = 6; lg.gain.value = 0.5; trem.gain.value = 0.5; lfo.connect(lg); lg.connect(trem.gain);
+    g.gain.value = 0.0001; o.connect(trem); o2.connect(trem); trem.connect(g); out(g, { wet: 0.2 });
+    o.start(); o2.start(); lfo.start(); g.gain.setTargetAtTime(0.03, ctx.currentTime, 0.2);
+    scan = { o: o, o2: o2, lfo: lfo, g: g };
+    scanT = setInterval(() => { noise(0.5, { f0: 400, f1: 2600, q: 4, vol: 0.03, wet: 0.3 }); tone(1600, 0.05, { vol: 0.03, wet: 0.3 }); }, 1100);
+  }
+  function scanSet(p) { if (!scan) return; p = clamp(p, 0, 1); scan.o.frequency.setTargetAtTime(320 + p * 700, ctx.currentTime, 0.08); scan.o2.frequency.setTargetAtTime(481 + p * 1050, ctx.currentTime, 0.08); scan.lfo.frequency.setTargetAtTime(6 + p * 12, ctx.currentTime, 0.1); }
+  function scanStop() {
+    clearInterval(scanT); if (!scan) return; const s = scan; scan = null;
+    s.g.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.1); setTimeout(() => { try { s.o.stop(); s.o2.stop(); s.lfo.stop(); } catch (e) {} }, 500);
+  }
+  return Object.assign({ init: init, setMuted: setMuted, isMuted: () => muted, humOn: humOn, humOff: humOff, scanStart: scanStart, scanSet: scanSet, scanStop: scanStop }, S);
+})();
+
+/* ===== armazenamento local (IndexedDB, com reserva em memória) ===== */
+const Store = (function () {
+  const NAMES = ['folders', 'items', 'pins', 'media', 'meta'];
+  let db = null, mem = null, persistent = false;
+  const newMem = () => { const m = {}; NAMES.forEach((n) => (m[n] = new Map())); return m; };
+  function open() {
+    return new Promise((resolve) => {
+      if (!window.indexedDB) { mem = newMem(); return resolve(false); }
+      let done = false;
+      const fin = (ok) => { if (done) return; done = true; if (!ok) mem = newMem(); persistent = ok; resolve(ok); };
+      try {
+        const rq = indexedDB.open('olho-de-deus', 1);
+        rq.onupgradeneeded = () => { const d = rq.result; NAMES.forEach((n) => { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: 'id' }); }); };
+        rq.onsuccess = () => { db = rq.result; fin(true); };
+        rq.onerror = () => fin(false); rq.onblocked = () => fin(false);
+        setTimeout(() => fin(false), 4000);
+      } catch (e) { fin(false); }
+    });
+  }
+  function useMemory() { db = null; mem = newMem(); persistent = false; }
+  function req(store, mode, fn) {
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = db.transaction(store, mode), r = fn(tx.objectStore(store));
+        tx.oncomplete = () => resolve(r ? r.result : undefined); tx.onerror = tx.onabort = () => reject(tx.error);
+      } catch (e) { reject(e); }
+    });
+  }
+  const get = (s, id) => (mem ? Promise.resolve(mem[s].get(id)) : req(s, 'readonly', (os) => os.get(id)));
+  const all = (s) => (mem ? Promise.resolve(Array.from(mem[s].values())) : req(s, 'readonly', (os) => os.getAll()).then((r) => r || []));
+  const put = (s, o) => (mem ? (mem[s].set(o.id, o), Promise.resolve(o)) : req(s, 'readwrite', (os) => os.put(o)).then(() => o));
+  const del = (s, id) => (mem ? (mem[s].delete(id), Promise.resolve()) : req(s, 'readwrite', (os) => os.delete(id)));
+  async function clearAll() { if (mem) { NAMES.forEach((n) => mem[n].clear()); return; } for (const n of NAMES) await req(n, 'readwrite', (os) => os.clear()); }
+  return { open: open, useMemory: useMemory, get: get, all: all, put: put, del: del, clearAll: clearAll, persistent: () => persistent };
+})();
+
+/* ===== interface: modais, avisos, downloads ===== */
+const ui = (function () {
+  function toast(msg, ms) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), ms || 2600); }
+  function modal(o) {
+    return new Promise((resolve) => {
+      const back = el('div', { class: 'mback' }), box = el('div', { class: 'mbox', role: 'dialog', 'aria-modal': 'true' }), row = el('div', { class: 'mbtns' });
+      const close = (v) => { back.remove(); resolve(v); };
+      if (o.title) box.append(el('div', { class: 'mtitle', text: o.title }));
+      if (o.body) box.append(o.body);
+      (o.buttons || []).forEach((b) => row.append(el('button', { type: 'button', class: b.cls || '', text: b.label, onclick: () => { const r = b.onClick ? b.onClick() : b.value; if (r === false) return; close(r === undefined ? b.value : r); } })));
+      box.append(row); back.append(box); $('modalRoot').append(back);
+      back.addEventListener('pointerdown', (e) => { if (e.target === back) close(o.dismiss); });
+      const inp = box.querySelector('input,textarea,select'); if (inp) setTimeout(() => inp.focus(), 40);
+    });
+  }
+  async function confirm(msg, o) { o = o || {}; return !!(await modal({ title: msg, dismiss: false, buttons: [{ label: 'Cancelar', value: false, cls: 'quiet' }, { label: o.ok || 'Confirmar', value: true, cls: o.danger ? 'danger' : 'pri' }] })); }
+  async function prompt(title, value, o) {
+    o = o || {};
+    const inp = el('input', { type: o.type || 'text', value: value || '', placeholder: o.placeholder || '', inputmode: o.inputmode || null, autocomplete: 'off', maxlength: o.max || 120 });
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { const b = inp.closest('.mbox').querySelector('.pri'); if (b) b.click(); } });
+    return modal({ title: title, body: inp, dismiss: null, buttons: [{ label: 'Cancelar', value: null, cls: 'quiet' }, { label: 'OK', cls: 'pri', onClick: () => inp.value.trim() }] });
+  }
+  function choose(title, options) {
+    return new Promise((resolve) => {
+      const back = el('div', { class: 'mback' }), box = el('div', { class: 'mbox', role: 'dialog', 'aria-modal': 'true' }), list = el('div', { class: 'mlist' });
+      const close = (v) => { back.remove(); resolve(v); };
+      box.append(el('div', { class: 'mtitle', text: title }));
+      options.forEach((op) => list.append(el('button', { type: 'button', text: op.label, style: 'padding-left:' + (12 + (op.indent || 0) * 16) + 'px', onclick: () => close(op.value) })));
+      box.append(list, el('div', { class: 'mbtns' }, el('button', { type: 'button', class: 'quiet', text: 'Cancelar', onclick: () => close(undefined) })));
+      back.append(box); $('modalRoot').append(back);
+      back.addEventListener('pointerdown', (e) => { if (e.target === back) close(undefined); });
+    });
+  }
+  return { toast: toast, modal: modal, confirm: confirm, prompt: prompt, choose: choose };
+})();
+
+const DL_EXT = new Set('gif png jpg jpeg webp mp4 webm txt json md docx pptx epub csv ttf html svg pdf xlsx zip'.split(' '));
+const canDownload = (name) => !window.claude || DL_EXT.has(extOf(name));
+async function saveFile(name, data) {
+  let dl = null;
+  try { if (window.claude && window.claude.use) dl = await window.claude.use('downloads'); } catch (e) {}
+  if (dl) {
+    if (!DL_EXT.has(extOf(name))) { ui.toast('Este formato não pode ser baixado aqui.'); return; }
+    try { await dl.save({ filename: name, data: data }); ui.toast('Enviado para salvar.'); }
+    catch (e) { if (e && e.code === 'declined') return; ui.toast('Não foi possível baixar.'); }
+    return;
+  }
+  if (window.claude) { ui.toast('Download indisponível nesta visualização.'); return; }
+  const blob = data instanceof Blob ? data : new Blob([data]), url = URL.createObjectURL(blob), a = el('a', { href: url, download: name });
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+/* imagem/vídeo a partir de Blob; se o navegador bloquear blob:, tenta data: */
+function mediaEl(tag, blob, props, keep) {
+  const node = el(tag, props), url = URL.createObjectURL(blob); if (keep) keep.push(url);
+  let tried = false;
+  node.addEventListener('error', () => { if (tried) return; tried = true; const fr = new FileReader(); fr.onload = () => { node.src = fr.result; }; fr.readAsDataURL(blob); });
+  node.src = url; return node;
+}
+
+/* ===== Retina: localização de íris, código binário e comparação (funções puras) ===== */
+const Retina = (function () {
+  const NA = 80, NR = 10, K = 4, SIG = 2.2, LAM = 6.5, VALID_SIN = 0.85, MIN_BITS = 200;
+  const L = NR * 2;
+
+  const KC = new Float64Array(2 * K + 1), KS = new Float64Array(2 * K + 1);
+  (function () {
+    let sum = 0;
+    for (let k = -K; k <= K; k++) {
+      const w = Math.exp(-(k * k) / (2 * SIG * SIG));
+      KC[k + K] = w * Math.cos((2 * Math.PI * k) / LAM);
+      KS[k + K] = w * Math.sin((2 * Math.PI * k) / LAM);
+      sum += KC[k + K];
+    }
+    const off = sum / (2 * K + 1);
+    for (let k = 0; k < 2 * K + 1; k++) KC[k] -= off;
+  })();
+
+  function integral(g, n) {
+    const w = n + 1, I = new Float64Array(w * w);
+    for (let y = 0; y < n; y++) {
+      let row = 0;
+      for (let x = 0; x < n; x++) {
+        row += g[y * n + x];
+        I[(y + 1) * w + (x + 1)] = I[y * w + (x + 1)] + row;
+      }
+    }
+    return I;
+  }
+  function mean(I, n, x0, y0, x1, y1) {
+    x0 = Math.max(0, Math.round(x0)); y0 = Math.max(0, Math.round(y0));
+    x1 = Math.min(n, Math.round(x1)); y1 = Math.min(n, Math.round(y1));
+    const a = (x1 - x0) * (y1 - y0);
+    if (a <= 0) return 0;
+    const w = n + 1;
+    return (I[y1 * w + x1] - I[y0 * w + x1] - I[y1 * w + x0] + I[y0 * w + x0]) / a;
+  }
+
+  // Procura um disco escuro (íris/pupila) com fundo claro (esclera) dos dois lados.
+  function localize(g, n, o) {
+    const I = integral(g, n);
+    let best = null;
+    for (let cy = o.cMin; cy <= o.cMax; cy += o.cStep) {
+      for (let cx = o.cMin; cx <= o.cMax; cx += o.cStep) {
+        for (let r = o.rMin; r <= o.rMax + 1e-6; r += o.rStep) {
+          if (cx - 2 * r < 0 || cx + 2 * r > n || cy - 1.2 * r < 0 || cy + 1.2 * r > n) continue;
+          const hi = r * 0.8;
+          const m0 = mean(I, n, cx - hi, cy - hi, cx + hi, cy + hi);
+          const mL = mean(I, n, cx - 2 * r, cy - 0.7 * r, cx - 1.2 * r, cy + 0.7 * r);
+          const mR = mean(I, n, cx + 1.2 * r, cy - 0.7 * r, cx + 2 * r, cy + 0.7 * r);
+          const s = Math.min((mL - m0) / (mL + m0 + 8), (mR - m0) / (mR + m0 + 8));
+          if (!best || s > best.score) best = { x: cx, y: cy, r: r, score: s };
+        }
+      }
+    }
+    return best && best.score >= (o.minScore || 0.1) ? best : null;
+  }
+
+
+  // Refina centro e raio usando a corda horizontal mais larga (robusto a pálpebras cobrindo a íris).
+  function refine(g, n, l) {
+    const I = integral(g, n);
+    const hi = l.r * 0.8;
+    const m0 = mean(I, n, l.x - hi, l.y - hi, l.x + hi, l.y + hi);
+    const mL = mean(I, n, l.x - 2 * l.r, l.y - 0.7 * l.r, l.x - 1.2 * l.r, l.y + 0.7 * l.r);
+    const mR = mean(I, n, l.x + 1.2 * l.r, l.y - 0.7 * l.r, l.x + 2 * l.r, l.y + 0.7 * l.r);
+    const T = m0 + 0.55 * ((mL + mR) / 2 - m0);
+    const sm = function (x, y) { // média 3x3
+      let s = 0, c = 0;
+      for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+        const xx = Math.round(x) + i, yy = Math.round(y) + j;
+        if (xx >= 0 && yy >= 0 && xx < n && yy < n) { s += g[yy * n + xx]; c++; }
+      }
+      return c ? s / c : 255;
+    };
+    const rows = [];
+    for (let y = l.y - 0.85 * l.r; y <= l.y + 0.85 * l.r + 1e-6; y += 0.5) {
+      let xl = null, xr = null;
+      for (let d = 0; d <= 2.2 * l.r; d += 0.5) { if (sm(l.x - d, y) > T) { xl = l.x - d; break; } }
+      for (let d = 0; d <= 2.2 * l.r; d += 0.5) { if (sm(l.x + d, y) > T) { xr = l.x + d; break; } }
+      if (xl != null && xr != null) rows.push({ y: y, xl: xl, xr: xr, w: xr - xl });
+    }
+    if (rows.length < 5) return null;
+    let wmax = 0;
+    rows.forEach(function (q) { if (q.w > wmax) wmax = q.w; });
+    let sy = 0, sx = 0, sw = 0, c = 0;
+    rows.forEach(function (q) { if (q.w >= 0.97 * wmax) { sy += q.y; sx += (q.xl + q.xr) / 2; sw += q.w; c++; } });
+    return { x: sx / c, y: sy / c, r: (sw / c) / 2, score: l.score };
+  }
+
+  function sample(g, n, x, y) {
+    if (x < 0 || y < 0 || x > n - 1 || y > n - 1) return NaN;
+    const x0 = x | 0, y0 = y | 0, x1 = Math.min(n - 1, x0 + 1), y1 = Math.min(n - 1, y0 + 1);
+    const fx = x - x0, fy = y - y0;
+    return g[y0 * n + x0] * (1 - fx) * (1 - fy) + g[y0 * n + x1] * fx * (1 - fy) +
+           g[y1 * n + x0] * (1 - fx) * fy + g[y1 * n + x1] * fx * fy;
+  }
+
+  // Desdobra o anel ao redor da íris (polar) e gera um código binário estilo Daugman (Gabor 1D).
+  function encode(g, n, cx, cy, rho) {
+    const P = new Float32Array(NR * NA), colOK = new Uint8Array(NA);
+    let nv = 0;
+    for (let a = 0; a < NA; a++) {
+      const th = (2 * Math.PI * a) / NA, c = Math.cos(th), s = Math.sin(th);
+      let ok = Math.abs(s) < VALID_SIN ? 1 : 0;
+      for (let r = 0; r < NR && ok; r++) {
+        const rad = rho * (0.5 + (0.4 * r) / (NR - 1));
+        const v = sample(g, n, cx + rad * c, cy + rad * s);
+        if (v !== v) ok = 0; else P[r * NA + a] = v;
+      }
+      colOK[a] = ok; nv += ok;
+    }
+    if (nv < 24) return null;
+    for (let r = 0; r < NR; r++) {
+      let m = 0;
+      for (let a = 0; a < NA; a++) if (colOK[a]) m += P[r * NA + a];
+      m /= nv;
+      for (let a = 0; a < NA; a++) P[r * NA + a] = colOK[a] ? P[r * NA + a] - m : 0;
+    }
+    const re = new Float32Array(NR * NA), im = new Float32Array(NR * NA), use = new Uint8Array(NA);
+    for (let a = 0; a < NA; a++) {
+      if (!colOK[a]) continue;
+      let cnt = 0;
+      for (let k = -K; k <= K; k++) if (colOK[(a + k + NA) % NA]) cnt++;
+      if (cnt < 2 * K - 1) continue;
+      use[a] = 1;
+      for (let r = 0; r < NR; r++) {
+        let sr = 0, si = 0;
+        for (let k = -K; k <= K; k++) {
+          const b = (a + k + NA) % NA;
+          if (!colOK[b]) continue;
+          const p = P[r * NA + b];
+          sr += p * KC[k + K]; si += p * KS[k + K];
+        }
+        re[r * NA + a] = sr; im[r * NA + a] = si;
+      }
+    }
+    const en = [];
+    for (let a = 0; a < NA; a++) if (use[a]) for (let r = 0; r < NR; r++) en.push(re[r * NA + a] * re[r * NA + a] + im[r * NA + a] * im[r * NA + a]);
+    if (en.length < MIN_BITS / 2) return null;
+    en.sort(function (x, y) { return x - y; });
+    const med = en[en.length >> 1];
+    const bits = new Uint8Array(NA * L), mask = new Uint8Array(NA * L);
+    let valid = 0;
+    for (let a = 0; a < NA; a++) {
+      if (!use[a]) continue;
+      for (let r = 0; r < NR; r++) {
+        const i = r * NA + a, e = re[i] * re[i] + im[i] * im[i];
+        const idx = (a * NR + r) * 2;
+        bits[idx] = re[i] > 0 ? 1 : 0; bits[idx + 1] = im[i] > 0 ? 1 : 0;
+        if (e >= 0.3 * med) { mask[idx] = 1; mask[idx + 1] = 1; valid += 2; }
+      }
+    }
+    if (valid < MIN_BITS) return null;
+    return { bits: bits, mask: mask };
+  }
+
+  // Distância de Hamming mascarada, com deslocamento angular (compensa inclinação da cabeça).
+  function distance(qb, qm, tb, tm, maxShift) {
+    if (maxShift == null) maxShift = 3;
+    let best = { d: 1, n: 0, s: 0 };
+    for (let s = -maxShift; s <= maxShift; s++) {
+      let n = 0, diff = 0;
+      for (let a = 0; a < NA; a++) {
+        const b = (a + s + NA) % NA, ia = a * L, ib = b * L;
+        for (let j = 0; j < L; j++) {
+          if (qm[ia + j] && tm[ib + j]) { n++; if (qb[ia + j] !== tb[ib + j]) diff++; }
+        }
+      }
+      if (n < MIN_BITS) continue;
+      const d = diff / n;
+      if (d < best.d) best = { d: d, n: n, s: s };
+    }
+    return best;
+  }
+
+  function rotate(code, s) {
+    const bits = new Uint8Array(code.bits.length), mask = new Uint8Array(code.mask.length);
+    for (let a = 0; a < NA; a++) {
+      const b = (((a + s) % NA) + NA) % NA;
+      bits.set(code.bits.subarray(b * L, b * L + L), a * L);
+      mask.set(code.mask.subarray(b * L, b * L + L), a * L);
+    }
+    return { bits: bits, mask: mask };
+  }
+
+  // Consenso entre várias capturas: só bits estáveis entram no modelo.
+  function buildTemplate(samples) {
+    const ref = samples[0], aligned = [ref];
+    for (let i = 1; i < samples.length; i++) {
+      const d = distance(samples[i].bits, samples[i].mask, ref.bits, ref.mask, 6);
+      aligned.push(rotate(samples[i], -d.s));
+    }
+    const T = NA * L, bits = new Uint8Array(T), mask = new Uint8Array(T);
+    const N = aligned.length, minN = Math.ceil(0.6 * N);
+    for (let j = 0; j < T; j++) {
+      let n = 0, k = 0;
+      for (let i = 0; i < N; i++) if (aligned[i].mask[j]) { n++; k += aligned[i].bits[j]; }
+      if (n >= minN) {
+        bits[j] = 2 * k >= n ? 1 : 0;
+        mask[j] = Math.max(k, n - k) / n >= 0.75 ? 1 : 0;
+      }
+    }
+    return { bits: bits, mask: mask };
+  }
+
+  function ser(a) { let s = ''; for (let i = 0; i < a.length; i++) s += a[i] ? '1' : '0'; return s; }
+  function de(s) { const a = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i) === 49 ? 1 : 0; return a; }
+  function count(mask) { let c = 0; for (let i = 0; i < mask.length; i++) c += mask[i]; return c; }
+
+  return { NA: NA, NR: NR, localize: localize, refine: refine, encode: encode, distance: distance, rotate: rotate,
+           buildTemplate: buildTemplate, ser: ser, de: de, count: count };
+})();
+if (typeof module !== 'undefined') module.exports = Retina;
+
+/* ===== Astro: posição do Sol, terminador dia/noite, nascer e pôr do sol ===== */
+const Astro = (function () {
+  const R = Math.PI / 180;
+  const norm = function (x, m) { return ((x % m) + m) % m; };
+
+  function sun(date) {
+    const d = date.getTime() / 86400000 + 2440587.5 - 2451545.0;
+    const g = norm(357.529 + 0.98560028 * d, 360);
+    const q = norm(280.459 + 0.98564736 * d, 360);
+    const Lm = q + 1.915 * Math.sin(g * R) + 0.02 * Math.sin(2 * g * R);
+    const e = 23.439 - 0.00000036 * d;
+    const ra = norm(Math.atan2(Math.cos(e * R) * Math.sin(Lm * R), Math.cos(Lm * R)) / R, 360);
+    const dec = Math.asin(Math.sin(e * R) * Math.sin(Lm * R)) / R;
+    const gmst = norm(280.46061837 + 360.98564736629 * d, 360);
+    const lon = norm(ra - gmst + 180, 360) - 180;
+    const eot = 4 * (norm(q - ra + 180, 360) - 180);   // minutos
+    return { lat: dec, lon: lon, eot: eot };
+  }
+
+  // altitude do Sol (graus) em um ponto
+  function altitude(lat, lon, date) {
+    const s = sun(date), H = (lon - s.lon) * R;
+    const v = Math.sin(lat * R) * Math.sin(s.lat * R) + Math.cos(lat * R) * Math.cos(s.lat * R) * Math.cos(H);
+    return Math.asin(Math.max(-1, Math.min(1, v))) / R;
+  }
+
+  // curva do terminador: lat em cada longitude + lado da noite
+  function terminator(date, step) {
+    const s = sun(date), pts = [];
+    let dec = s.lat;
+    if (Math.abs(dec) < 0.01) dec = dec < 0 ? -0.01 : 0.01;
+    for (let lon = -180; lon <= 180; lon += step || 2) {
+      const H = (lon - s.lon) * R;
+      pts.push([lon, Math.atan(-Math.cos(H) / Math.tan(dec * R)) / R]);
+    }
+    return { pts: pts, nightPole: dec > 0 ? -90 : 90, sun: s };
+  }
+
+  // nascer/pôr do sol do dia solar local (Date | null) e situação polar
+  function sunTimes(lat, lon, date) {
+    const localMs = date.getTime() + lon * 240000;
+    const dayIdx = Math.floor(localMs / 86400000);
+    const s0 = sun(new Date(dayIdx * 86400000 + 43200000 - lon * 240000));
+    const noon = dayIdx * 86400000 + 43200000 - lon * 240000 - s0.eot * 60000;
+    const s = sun(new Date(noon));
+    const cosw = (Math.sin(-0.833 * R) - Math.sin(lat * R) * Math.sin(s.lat * R)) / (Math.cos(lat * R) * Math.cos(s.lat * R));
+    if (cosw > 1) return { rise: null, set: null, polar: 'night', noon: new Date(noon) };
+    if (cosw < -1) return { rise: null, set: null, polar: 'day', noon: new Date(noon) };
+    const w = Math.acos(cosw) / R;
+    return { rise: new Date(noon - w * 240000), set: new Date(noon + w * 240000), polar: null, noon: new Date(noon) };
+  }
+
+  return { sun: sun, altitude: altitude, terminator: terminator, sunTimes: sunTimes };
+})();
+if (typeof module !== 'undefined') module.exports = Astro;
+
+/* ===== Analisador de câmera: acha o olho, refina a íris e gera o código ===== */
+const Analyzer = (function () {
+  const c1 = document.createElement('canvas'), c2 = document.createElement('canvas');
+  c1.width = c1.height = 128; c2.width = c2.height = 160;
+  const g1 = c1.getContext('2d', { willReadFrequently: true }), g2 = c2.getContext('2d', { willReadFrequently: true });
+  function gray(img, n) { const d = img.data, g = new Float32Array(n * n); for (let i = 0, j = 0; i < g.length; i++, j += 4) g[i] = 0.299 * d[j] + 0.587 * d[j + 1] + 0.114 * d[j + 2]; return g; }
+  function grab(v) {
+    const vw = v.videoWidth, vh = v.videoHeight;
+    if (!vw) return { ok: false, reason: 'AGUARDANDO IMAGEM' };
+    const side = Math.min(vw, vh), sx = (vw - side) / 2, sy = (vh - side) / 2;
+    g1.drawImage(v, sx, sy, side, side, 0, 0, 128, 128);
+    const l1 = Retina.localize(gray(g1.getImageData(0, 0, 128, 128), 128), 128, { rMin: 6, rMax: 40, rStep: 2, cMin: 24, cMax: 104, cStep: 2 });
+    if (!l1) return { ok: false, reason: 'OLHO NÃO ENCONTRADO' };
+    const k = side / 128, nx = sx + l1.x * k, ny = sy + l1.y * k, rn = l1.r * k;
+    const ov = { x: (nx - sx) / side, y: (ny - sy) / side, r: rn / side };
+    if (rn < 14) return { ok: false, reason: 'APROXIME O OLHO', ov: ov };
+    const half = 4 * rn, x0 = nx - half, y0 = ny - half;
+    if (x0 < 0 || y0 < 0 || x0 + 2 * half > vw || y0 + 2 * half > vh) return { ok: false, reason: 'CENTRALIZE O OLHO', ov: ov };
+    g2.drawImage(v, x0, y0, 2 * half, 2 * half, 0, 0, 160, 160);
+    const gr = gray(g2.getImageData(0, 0, 160, 160), 160);
+    const l2 = Retina.localize(gr, 160, { rMin: 12, rMax: 36, rStep: 1, cMin: 48, cMax: 112, cStep: 1 });
+    if (!l2) return { ok: false, reason: 'OLHO NÃO ENCONTRADO', ov: ov };
+    const f = Retina.refine(gr, 160, l2);
+    if (!f) return { ok: false, reason: 'ABRA MAIS O OLHO', ov: ov };
+    const enc = Retina.encode(gr, 160, f.x, f.y, f.r);
+    if (!enc) return { ok: false, reason: 'IMAGEM FRACA: MAIS LUZ', ov: ov };
+    const s2 = (2 * half) / 160;
+    return { ok: true, code: enc, ov: { x: (x0 + f.x * s2 - sx) / side, y: (y0 + f.y * s2 - sy) / side, r: (f.r * s2) / side } };
+  }
+  return { grab: grab };
+})();
+
+/* ===== Tela de bloqueio: cadastro e verificação da retina, PIN de emergência ===== */
+const Lock = (function () {
+  const v = $('cam'), oc = $('ov').getContext('2d');
+  let stream = null, finish = null, forceEnroll = false, busy = false;
+  const avg = (a) => a.reduce((s, x) => s + x, 0) / a.length;
+
+  async function log(msg, cls) {
+    const box = $('log'), p = el('div', { class: 'ln' + (cls ? ' ' + cls : '') });
+    box.append(p); while (box.children.length > 6) box.removeChild(box.firstChild);
+    for (let i = 1; i <= msg.length; i++) { p.textContent = msg.slice(0, i); if (i % 3 === 0) Sfx.key(); await sleep(10); }
+  }
+  const setBar = (p) => { $('barfill').style.width = Math.round(clamp(p, 0, 1) * 100) + '%'; };
+  function setHint(t, ok) { const h = $('hint'); if (h.textContent !== t) h.textContent = t; h.classList.toggle('ok', !!ok); }
+  function drawOv(res) {
+    oc.clearRect(0, 0, 300, 300); oc.lineWidth = 2; oc.strokeStyle = 'rgba(0,255,156,.45)'; oc.setLineDash([6, 6]);
+    oc.beginPath(); oc.arc(150, 150, 100, 0, 7); oc.stroke(); oc.setLineDash([]);
+    if (res && res.ov) {
+      const x = res.ov.x * 300, y = res.ov.y * 300, r = Math.max(4, res.ov.r * 300);
+      oc.strokeStyle = res.ok ? '#00ff9c' : '#ffb020'; oc.lineWidth = 3;
+      oc.beginPath(); oc.arc(x, y, r, 0, 7); oc.stroke();
+      oc.beginPath(); oc.moveTo(x - 9, y); oc.lineTo(x + 9, y); oc.moveTo(x, y - 9); oc.lineTo(x, y + 9); oc.stroke();
+    }
+  }
+  function stopCam() { if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; } v.srcObject = null; drawOv(null); }
+  async function openCamera() {
+    stopCam();
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return false;
+      try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false }); }
+      catch (e) { if (e && (e.name === 'NotAllowedError' || e.name === 'SecurityError')) throw e; stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); }
+      v.srcObject = stream; try { await v.play(); } catch (e) {}
+      for (let i = 0; i < 30 && !v.videoWidth; i++) await sleep(100);
+      return !!v.videoWidth;
+    } catch (e) { return false; }
+  }
+
+  // captura quadros válidos; onSample devolve um status para encerrar
+  function capture(o) {
+    return new Promise((resolve) => {
+      const t0 = performance.now(); let working = false, done = false, valid = 0, lastAt = 0;
+      const fin = (s) => { if (done) return; done = true; clearInterval(iv); drawOv(null); resolve(s); };
+      const iv = setInterval(() => {
+        if (done || working) return;
+        if (performance.now() - t0 > (o.timeout || 45000)) return fin('timeout');
+        if (v.readyState < 2) return;
+        working = true;
+        try {
+          const res = Analyzer.grab(v); drawOv(res);
+          if (res.ok) {
+            setHint(o.okHint || 'OLHO DETECTADO', true);
+            const now = performance.now();
+            if (now - lastAt >= (o.every || 0)) { lastAt = now; valid++; const r = o.onSample(res, valid); Sfx.sample(); if (r) fin(r); }
+          } else setHint(res.reason, false);
+        } catch (e) { console.error(e); }
+        working = false;
+      }, 130);
+    });
+  }
+
+  async function hashPin(pin, salt) {
+    try { const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(salt + ':' + pin)); return Array.from(new Uint8Array(h)).map((x) => p2(x.toString(16))).join(''); }
+    catch (e) { let x = 0; const s = salt + pin; for (let i = 0; i < s.length; i++) x = (x * 31 + s.charCodeAt(i)) | 0; return 'w' + x; }
+  }
+  async function savePin(pin) { const salt = uid(); await Store.put('meta', { id: 'pin', salt: salt, hash: await hashPin(pin, salt) }); }
+  async function askNewPin(title) {
+    for (;;) {
+      const pin = await ui.prompt(title, '', { type: 'password', inputmode: 'numeric', max: 8, placeholder: '4 a 8 dígitos' });
+      if (pin === null || pin === '') return false;
+      if (/^\d{4,8}$/.test(pin)) { await savePin(pin); ui.toast('PIN salvo.'); return true; }
+      ui.toast('Use de 4 a 8 dígitos.');
+    }
+  }
+
+  async function enroll() {
+    await log('> PRIMEIRO ACESSO: CADASTRO DE RETINA.');
+    await log('> APROXIME UM OLHO (10–20 CM), ABRA BEM, BOA LUZ.');
+    const A = [];
+    let r = await capture({ every: 320, okHint: 'CAPTURANDO...', onSample: (res) => { A.push(res.code); setBar(A.length / 16); Sfx.scanSet(A.length / 16); return A.length >= 10 ? 'ok' : null; } });
+    if (r !== 'ok') return false;
+    const tpl = Retina.buildTemplate(A), D = [];
+    await log('> MODELO CRIADO. VALIDANDO...');
+    r = await capture({ every: 250, okHint: 'VALIDANDO...', onSample: (res) => { D.push(Retina.distance(res.code.bits, res.code.mask, tpl.bits, tpl.mask).d); setBar((10 + D.length) / 16); return D.length >= 6 ? 'ok' : null; } });
+    if (r !== 'ok') return false;
+    const mu = avg(D), mx = Math.max.apply(null, D);
+    if (mu > 0.32 || Retina.count(tpl.mask) < 240) { await log('> QUALIDADE BAIXA. USE MAIS LUZ E FIQUE PARADO.', 'bad'); return false; }
+    const thr = clamp(Math.max(mu + 0.05, mx + 0.02), 0.18, 0.34);
+    await Store.put('meta', { id: 'retina', bits: Retina.ser(tpl.bits), mask: Retina.ser(tpl.mask), thr: thr, created: Date.now() });
+    Sfx.scanStop(); await log('> RETINA CADASTRADA.', 'ok'); Sfx.ok();
+    await askNewPin('PIN de emergência (4 a 8 dígitos), caso a câmera falhe. Deixe vazio para pular.');
+    Sfx.scanStart();
+    return true;
+  }
+
+  async function verifyEye(rec) {
+    const tb = Retina.de(rec.bits), tm = Retina.de(rec.mask), win = []; let total = 0;
+    return capture({ every: 200, timeout: 45000, okHint: 'COMPARANDO RETINA...', onSample: (res) => {
+      const d = Retina.distance(res.code.bits, res.code.mask, tb, tm).d;
+      win.push(d <= rec.thr); if (win.length > 12) win.shift(); total++;
+      const p = win.filter(Boolean).length; setBar(p / 9); Sfx.scanSet(p / 9);
+      if (win.length === 12 && p >= 9) return 'ok';
+      return total >= 45 ? 'fail' : null;
+    } });
+  }
+
+  async function fail(msg, o) {
+    o = o || {}; stopCam(); Sfx.scanStop(); setBar(0); setHint(''); Sfx.denied();
+    await log('> ' + msg, 'bad'); await log('> ACESSO NEGADO. SISTEMA PERMANECE BLOQUEADO.', 'bad');
+    const pin = await Store.get('meta', 'retina') && await Store.get('meta', 'pin');
+    $('usePin').hidden = !pin; $('tempMode').hidden = o.cam !== false; $('wipe').hidden = !(await Store.get('meta', 'retina'));
+    $('actions').hidden = false;
+  }
+
+  async function attempt() {
+    if (busy) return; busy = true;
+    try {
+      $('actions').hidden = true; $('log').textContent = ''; setBar(0); setHint('');
+      await log('> OLHO DE DEUS v2.0 :: SISTEMA BLOQUEADO');
+      if (!Store.persistent()) await log('> AVISO: ARMAZENAMENTO DO NAVEGADOR INDISPONÍVEL.', 'dim');
+      let rec = await Store.get('meta', 'retina');
+      await log('> INICIALIZANDO SENSOR ÓPTICO...');
+      if (!(await openCamera())) return fail('SENSOR ÓPTICO INDISPONÍVEL OU PERMISSÃO NEGADA.', { cam: false });
+      Sfx.scanStart();
+      if (!rec || forceEnroll) {
+        const ok = await enroll();
+        if (!ok) return fail('CADASTRO NÃO CONCLUÍDO.');
+        forceEnroll = false; rec = await Store.get('meta', 'retina'); setBar(0);
+      }
+      await log('> LOCALIZANDO RETINA DO USUÁRIO "EU"...');
+      const r = await verifyEye(rec);
+      if (r !== 'ok') return fail(r === 'timeout' ? 'TEMPO ESGOTADO: OLHO NÃO RECONHECIDO.' : 'RETINA NÃO CONFIRMADA.');
+      Sfx.scanStop(); setBar(1); setHint('');
+      await log('> RETINA CONFIRMADA. ACESSO CONCEDIDO.', 'ok'); Sfx.granted();
+      await sleep(900); stopCam(); finish({ mode: 'real' });
+    } finally { busy = false; }
+  }
+
+  async function usePin() {
+    const rec = await Store.get('meta', 'pin'); if (!rec) return;
+    const pin = await ui.prompt('Digite seu PIN de emergência', '', { type: 'password', inputmode: 'numeric', max: 8 });
+    if (!pin) return;
+    if ((await hashPin(pin, rec.salt)) === rec.hash) { Sfx.granted(); await log('> PIN ACEITO. ACESSO CONCEDIDO.', 'ok'); await sleep(600); finish({ mode: 'real' }); }
+    else { Sfx.denied(); ui.toast('PIN incorreto.'); await sleep(1500); }
+  }
+  async function wipe() {
+    if (!(await ui.confirm('Apagar o cadastro da retina, o PIN e TODAS as pastas, arquivos e pins do mapa deste aparelho? Não dá para desfazer.', { ok: 'Apagar tudo', danger: true }))) return;
+    await Store.clearAll(); ui.toast('Tudo apagado.'); attempt();
+  }
+  function tempMode() { Store.useMemory(); finish({ mode: 'temp' }); }
+
+  function start(o) {
+    return new Promise((resolve) => {
+      finish = resolve; forceEnroll = !!(o && o.forceEnroll);
+      $('retry').onclick = attempt; $('usePin').onclick = usePin; $('tempMode').onclick = tempMode; $('wipe').onclick = wipe;
+      Store.open().then(attempt);
+    });
+  }
+  return { start: start, savePin: askNewPin };
+})();
+
+/* ===== O olho de caracteres ===== */
+const Eye = (function () {
+  const cv = $('stage'), ctx = cv.getContext('2d'), wel = $('welcome');
+  const GL = '0123456789ABCDEF{}[]<>/\\|=+*#$%&@;:!?ｱｲｳｴｵｶｷｸｹｺﾊﾋﾌ'.split('');
+  const SEQ = '10101', K = 6, rnd = Math.random;
+  let W, H, dpr, cx, cy, a, b, b2, fs, sp, r, parts = [], amb = [];
+  let t0 = 0, last = 0, lastDraw = 0, mode = 'full', looping = false, nextBlink = 6.0, typed = false, formedFired = false, hooks = {};
+
+  const mod = (n, m) => ((n % m) + m) % m;
+  const easeOut = (x) => 1 - Math.pow(1 - x, 3.2);
+  function hash(n) { n = n | 0; n = (n ^ 61) ^ (n >>> 16); n = n + (n << 3); n = n ^ (n >>> 4); n = Math.imul(n, 0x27d4eb2d); n = n ^ (n >>> 15); return n >>> 0; }
+  const glyph = (seed, step) => GL[hash(seed + step * 7919) % GL.length];
+  function lid(x, up, k) { const q = 1 - (x * x) / (a * a * k * k); return q <= 0 ? 0 : (up ? b : b2) * k * Math.pow(q, 0.9); }
+
+  function mk(o) {
+    o.seed = (rnd() * 1e6) | 0; o.sx = cx + (rnd() - 0.5) * W * 0.9; o.sy = H + 30 + rnd() * H * 0.4; o.ch = GL[o.seed % GL.length];
+    const late = performance.now() - t0 > 5000;
+    o.delay = late ? 0 : o.d0 + rnd() * (o.d1 - o.d0); o.dur = late ? 0.001 : 1.5 + rnd() * 0.9; parts.push(o);
+  }
+  function build() {
+    parts = []; amb = []; let i, j, n;
+    n = Math.max(18, Math.round((2.6 * a) / sp));
+    for (i = 0; i <= n; i++) {
+      const u = (Math.PI * i) / n;
+      mk({ kind: 0, u: u, up: true, k: 1, dim: false, d0: 0, d1: 1.0 });
+      if (i > 0 && i < n) { mk({ kind: 0, u: u, up: false, k: 1, dim: false, d0: 0, d1: 1.0 }); mk({ kind: 0, u: u, up: true, k: 1.1, dim: true, d0: 0.2, d1: 1.2 }); }
+    }
+    for (let gx = -a * 0.92; gx < a * 0.92; gx += sp * 1.7) for (let v = -0.8; v <= 0.81; v += 0.4) {
+      const x0 = gx + (rnd() - 0.5) * sp * 0.6, h = lid(x0, v > 0, 1), y0 = -v * h;
+      if (Math.hypot(x0, y0) < r * 1.15 || h < sp * 0.6) continue;
+      mk({ kind: 3, x0: x0, v: v, d0: 0.4, d1: 1.6 });
+    }
+    for (let k = 0; k < K; k++) {
+      const rk = r * (0.4 + (0.6 * k) / (K - 1));
+      n = Math.max(6, Math.floor((2 * Math.PI * rk) / (sp * 0.82)));
+      for (j = 0; j < n; j++) mk({ kind: 1, ring: k, idx: j, rr: rk, th0: (2 * Math.PI * j) / n, dir: k % 2 ? -1 : 1, w: (k % 2 ? -1 : 1) * (0.22 + 0.05 * k), rate: 5 + k * 0.8, d0: 0.8, d1: 2.0 });
+    }
+    [0.1, 0.2, 0.3].forEach((f, q) => {
+      const rp = r * f, np = Math.max(5, Math.floor((2 * Math.PI * rp) / (sp * 0.8)));
+      for (let m = 0; m < np; m++) mk({ kind: 2, rr: rp, th0: (2 * Math.PI * m) / np, w: q % 2 ? -0.5 : 0.5, d0: 1.4, d1: 2.2 });
+    });
+    mk({ kind: 2, rr: 0, th0: 0, w: 0, d0: 1.4, d1: 2.2 });
+    for (i = 0; i < 60; i++) amb.push({ x: rnd() * W, y: rnd() * H, v: 30 + rnd() * 90, seed: (rnd() * 1e6) | 0 });
+  }
+  function layout() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2); W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.width = W + 'px'; cv.style.height = H + 'px'; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    a = Math.min(W * 0.46, H * 0.46); b = a * 0.5; b2 = b * 0.82; r = b * 0.8; fs = clamp(a / 12.5, 11, 17); sp = fs * 0.95; cx = W / 2; cy = H * 0.42;
+    wel.style.top = cy + b2 + Math.max(28, H * 0.06) + 'px';
+    build();
+  }
+
+  async function typeWelcome() {
+    const s = 'BEM VINDO AO OLHO DE DEUS';
+    wel.textContent = ''; const wt = el('span'), cur = el('span', { class: 'cur', text: '▌' }); wel.append(wt, cur); wel.classList.add('on');
+    for (let i = 1; i <= s.length; i++) { wt.textContent = s.slice(0, i); Sfx.key(); await sleep(60); }
+    wel.classList.add('glitch'); Sfx.glitch();
+    if (hooks.onTyped) hooks.onTyped();
+  }
+
+  function frame(now) {
+    if (mode === 'paused') { looping = false; return; }
+    requestAnimationFrame(frame);
+    if (mode === 'dim' && now - lastDraw < 50) return;
+    lastDraw = now;
+    const t = (now - t0) / 1000, dt = Math.min(0.1, (now - last) / 1000); last = now;
+    ctx.clearRect(0, 0, W, H); ctx.font = fs + 'px "Share Tech Mono","Courier New",monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const formed = clamp((t - 3.4) / 1.4, 0, 1);
+    let bl = 1;
+    if (t > 5.2 && t > nextBlink) { const q = (t - nextBlink) / 0.3; if (q < 1) bl = 1 - 0.93 * Math.sin(Math.PI * q); else nextBlink = t + 3.5 + rnd() * 4; }
+    const ox = formed * Math.sin(t * 0.55) * a * 0.05, oy = formed * Math.sin(t * 0.41 + 1.3) * b * 0.06;
+    const step10 = (t * 10) | 0, stepFast = (t * 14) | 0, stepSlow = (t * 3) | 0;
+    ctx.fillStyle = '#00ff9c';
+    for (let i = 0; i < amb.length; i++) {
+      const m = amb[i]; m.y -= m.v * dt; if (m.y < -20) { m.y = H + 20; m.x = rnd() * W; }
+      ctx.globalAlpha = 0.1 + 0.08 * ((m.seed % 3) / 2); ctx.fillText(glyph(m.seed, step10), m.x, m.y);
+    }
+    const gx = cx + ox, gy = cy + oy, g = ctx.createRadialGradient(gx, gy, r * 0.2, gx, gy, r * 2);
+    g.addColorStop(0, 'rgba(0,255,156,' + 0.16 * formed + ')'); g.addColorStop(1, 'rgba(0,255,156,0)');
+    ctx.globalAlpha = 1; ctx.fillStyle = g; ctx.fillRect(gx - r * 2, gy - r * 2, r * 4, r * 4);
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i], el0 = t - p.delay; if (el0 <= 0) continue;
+      const pr = clamp(el0 / p.dur, 0, 1), e = easeOut(pr); let tx, ty, ch, color, alpha;
+      if (p.kind === 0) {
+        tx = cx - a * p.k * Math.cos(p.u); ty = cy - (p.up ? 1 : -1) * lid(tx - cx, p.up, p.k) * bl; if (pr >= 1) ty += Math.sin(t * 3 + p.seed) * 0.6;
+        color = '#00ff9c'; alpha = p.dim ? 0.5 : 0.95; ch = pr < 1 || hash(p.seed + stepSlow * 31) % 17 === 0 ? glyph(p.seed, stepFast) : p.ch;
+      } else if (p.kind === 3) {
+        tx = cx + p.x0; ty = cy - p.v * lid(p.x0, p.v > 0, 1) * bl; color = '#00c878'; alpha = 0.32; ch = pr < 1 ? glyph(p.seed, stepFast) : hash(p.seed + stepSlow) % 2 ? '1' : '0';
+      } else {
+        const ang = p.th0 + t * p.w; tx = cx + ox + p.rr * Math.cos(ang); ty = cy + oy + p.rr * Math.sin(ang);
+        if (p.kind === 1) { ch = pr < 1 ? glyph(p.seed, stepFast) : SEQ[mod(p.idx + p.dir * Math.floor(t * p.rate), 5)]; color = p.ring === K - 1 ? '#b8ffe6' : '#00ff9c'; alpha = 0.6 + 0.4 * (p.ring / (K - 1)); }
+        else { ch = hash(p.seed + stepFast) % 2 ? '1' : '0'; color = '#eafff6'; alpha = 0.9; }
+      }
+      let x = p.sx + (tx - p.sx) * e, y = p.sy + (ty - p.sy) * e;
+      if (pr < 1) { x += Math.sin(t * 6 + p.seed) * (1 - pr) * 8; alpha *= 0.35 + 0.65 * pr; }
+      if ((p.kind === 1 || p.kind === 2) && pr > 0.9) {
+        const lh = lid(x - cx, y < cy, 1) * bl, ins = clamp((lh - Math.abs(y - cy)) / (fs * 0.7), 0, 1);
+        alpha *= 1 + (ins - 1) * clamp((pr - 0.9) / 0.1, 0, 1);
+      }
+      if (alpha < 0.02) continue;
+      ctx.globalAlpha = alpha; ctx.fillStyle = color; ctx.fillText(ch, x, y);
+    }
+    ctx.globalAlpha = 1;
+    if (!formedFired && t > 3.4) { formedFired = true; Sfx.boom(); Sfx.humOn(); }
+    if (!typed && t > 3.2) { typed = true; typeWelcome(); }
+  }
+  function loop() { if (looping) return; looping = true; last = performance.now(); requestAnimationFrame(frame); }
+
+  function run(h) {
+    hooks = h || {}; cv.style.display = 'block'; t0 = performance.now(); last = t0; mode = 'full'; layout();
+    window.addEventListener('resize', layout); Sfx.rise(3.4); loop();
+    return new Promise((resolve) => { const prev = hooks.onTyped; hooks.onTyped = () => { if (prev) prev(); setTimeout(resolve, 1600); }; });
+  }
+  function setMode(m) {
+    mode = m; cv.classList.toggle('dim', m !== 'full');
+    if (m === 'dim') { if (!looping) loop(); }
+    if (m === 'paused') { /* o loop para sozinho no próximo quadro */ }
+  }
+  return { run: run, setMode: setMode, hideWelcome: () => wel.classList.remove('on') };
+})();
+
+/* ===== Área de trabalho: pastas editáveis, notas, arquivos, abas ===== */
+const WS = (function () {
+  const state = { folders: [], items: [] };
+  const wins = new Map();
+  let zTop = 10, temp = false;
+  const TEXT_EXT = new Set('txt md json csv js ts html css py log xml yml yaml ini sh sql'.split(' '));
+  const wide = () => window.matchMedia('(min-width: 760px)').matches;
+  const byName = (x, y) => x.name.localeCompare(y.name, 'pt', { numeric: true, sensitivity: 'base' });
+  const kidsOf = (pid) => state.folders.filter((f) => f.parentId === pid).sort(byName);
+  const itemsIn = (fid) => state.items.filter((i) => i.folderId === fid).sort(byName);
+  const findF = (id) => state.folders.find((f) => f.id === id);
+  function pathOf(fid) { const p = []; let f = findF(fid); while (f) { p.unshift(f.name); f = findF(f.parentId); } return p; }
+  function descendants(fid) { const out = [fid]; kidsOf(fid).forEach((k) => descendants(k.id).forEach((d) => out.push(d))); return out; }
+  const countIn = (fid) => kidsOf(fid).length + itemsIn(fid).length;
+  const kindOf = (i) => (i.kind === 'note' ? 'TXT' : (i.mime || '').indexOf('image/') === 0 ? 'IMG' : (i.mime || '').indexOf('video/') === 0 ? 'VID' : (i.mime || '').indexOf('audio/') === 0 ? 'AUD' : 'BIN');
+
+  async function load() { state.folders = await Store.all('folders'); state.items = await Store.all('items'); }
+  async function seed() {
+    if (state.folders.length || (await Store.get('meta', 'seeded'))) return;
+    const now = Date.now();
+    const names = ['Alvos', 'Arquivos Secretos', 'Vigilância', 'Anotações', 'Mídia', 'Projetos'];
+    for (const n of names) { const f = { id: uid(), parentId: null, name: n, created: now, updated: now }; await Store.put('folders', f); state.folders.push(f); }
+    const notes = state.folders.find((f) => f.name === 'Anotações');
+    const it = { id: uid(), folderId: notes.id, kind: 'note', name: 'Leia-me', mime: 'text/plain', size: 0, created: now, updated: now,
+      text: 'Bem-vindo ao Olho de Deus.\n\nTudo aqui é seu:\n- crie, renomeie, mova e apague pastas (inclusive pastas dentro de pastas);\n- crie notas e edite como quiser (salva sozinho);\n- adicione fotos, vídeos, áudios e qualquer arquivo.\n\nOs dados ficam só neste navegador, neste aparelho.' };
+    it.size = new Blob([it.text]).size; await Store.put('items', it); state.items.push(it);
+    await Store.put('meta', { id: 'seeded', v: 1 });
+  }
+
+  /* ----- ícones da área de trabalho ----- */
+  function folderSvg() {
+    const s = el('span', { class: 'fold' });
+    s.innerHTML = '<svg viewBox="0 0 64 48" width="64" height="48" aria-hidden="true"><path d="M3 8h20l5 6h33v30H3z" fill="rgba(0,255,156,.10)" stroke="#00ff9c" stroke-width="2" stroke-linejoin="round"/><path d="M3 18h58" stroke="#00ff9c" stroke-width="1.5" opacity=".6"/></svg>';
+    return s;
+  }
+  function renderIcons(animate) {
+    const box = $('icons'); box.textContent = '';
+    kidsOf(null).forEach((f, i) => box.append(el('button', { type: 'button', class: 'icon' + (animate ? ' pop' : ''), style: animate ? 'animation-delay:' + i * 280 + 'ms' : null, onclick: () => openWin(f.id) },
+      folderSvg(), el('span', { class: 'ic-name', text: f.name }), el('span', { class: 'ic-meta', text: countIn(f.id) + ' itens' }))));
+    box.append(el('button', { type: 'button', class: 'icon add' + (animate ? ' pop' : ''), style: animate ? 'animation-delay:' + kidsOf(null).length * 280 + 'ms' : null, onclick: () => newFolder(null) },
+      el('span', { class: 'plus', text: '+' }), el('span', { class: 'ic-name', text: 'Nova pasta' })));
+  }
+  const refreshAll = () => { renderIcons(false); wins.forEach((w) => renderWin(w)); };
+
+  /* ----- janelas ----- */
+  function openWin(fid) {
+    if (wins.has(fid)) { focusWin(fid); return; }
+    const w = { id: fid, dir: fid, view: null, urls: [], flush: null };
+    w.title = el('span', { class: 'wt' });
+    const tb = el('div', { class: 'wtitle' }, el('span', { text: '▣' }), w.title, el('span', { class: 'grow' }), el('button', { type: 'button', class: 'sm', 'aria-label': 'Fechar', text: '✕', onclick: () => closeWin(fid) }));
+    w.bar = el('div', { class: 'wbar' }); w.body = el('div', { class: 'wbody' });
+    w.el = el('div', { class: 'win', role: 'dialog' }, tb, w.bar, w.body);
+    const n = wins.size; w.el.style.left = 24 + n * 30 + 'px'; w.el.style.top = 18 + n * 30 + 'px';
+    w.el.addEventListener('pointerdown', () => focusWin(fid));
+    wins.set(fid, w); $('winlayer').append(w.el); focusWin(fid); drag(w.el, tb); renderWin(w); Sfx.open();
+  }
+  function focusWin(id) { const w = wins.get(id); if (w) w.el.style.zIndex = ++zTop; }
+  function closeWin(id) {
+    const w = wins.get(id); if (!w) return;
+    if (w.flush) w.flush(); revoke(w); w.el.remove(); wins.delete(id); Sfx.close();
+  }
+  function drag(win, handle) {
+    let sx, sy, ox, oy, on = false;
+    handle.addEventListener('pointerdown', (e) => {
+      if (!wide() || e.target.closest('button')) return; on = true; sx = e.clientX; sy = e.clientY; ox = win.offsetLeft; oy = win.offsetTop; handle.setPointerCapture(e.pointerId);
+    });
+    handle.addEventListener('pointermove', (e) => {
+      if (!on) return; const L = $('winlayer');
+      win.style.left = clamp(ox + e.clientX - sx, 0, L.clientWidth - 80) + 'px'; win.style.top = clamp(oy + e.clientY - sy, 0, L.clientHeight - 40) + 'px';
+    });
+    const end = () => { on = false; }; handle.addEventListener('pointerup', end); handle.addEventListener('pointercancel', end);
+  }
+  function revoke(w) { w.urls.forEach((u) => URL.revokeObjectURL(u)); w.urls = []; }
+  const btn = (text, label, fn, cls) => el('button', { type: 'button', class: 'sm' + (cls ? ' ' + cls : ''), 'aria-label': label || text, title: label || text, text: text, onclick: fn });
+  const glyphBox = (t) => el('span', { class: 'gl', text: t });
+
+  function renderWin(w) {
+    const f = findF(w.dir);
+    if (!f) { closeWin(w.id); return; }
+    w.title.textContent = pathOf(w.dir).join(' / ');
+    if (w.view) return;
+    revoke(w); w.bar.textContent = ''; w.body.textContent = '';
+    if (w.dir !== w.id) w.bar.append(btn('← Voltar', 'Voltar', () => { w.dir = findF(w.dir).parentId || w.id; renderWin(w); Sfx.click(); }));
+    w.bar.append(btn('+ Nota', 'Nova nota', () => newNote(w)), btn('+ Arquivo', 'Adicionar arquivos', () => pickFiles(w)), btn('+ Pasta', 'Nova subpasta', () => newFolder(w.dir, w)),
+      btn('Renomear', 'Renomear esta pasta', () => renameFolder(f)), btn('Excluir', 'Excluir esta pasta', () => deleteFolder(f), 'danger'));
+    const subs = kidsOf(w.dir), its = itemsIn(w.dir);
+    if (!subs.length && !its.length) w.body.append(el('div', { class: 'empty', text: 'Pasta vazia. Use os botões acima para adicionar notas, arquivos ou subpastas.' }));
+    subs.forEach((s) => w.body.append(el('div', { class: 'row' },
+      el('button', { type: 'button', class: 'rowmain', onclick: () => { w.dir = s.id; renderWin(w); Sfx.click(); } }, glyphBox('DIR'), el('span', { class: 'rt' }, el('span', { class: 'nm', text: s.name }), el('span', { class: 'meta', text: countIn(s.id) + ' itens' }))),
+      el('div', { class: 'ract' }, btn('✎', 'Renomear', () => renameFolder(s)), btn('⇄', 'Mover', () => moveFolder(s)), btn('✕', 'Excluir', () => deleteFolder(s), 'danger')))));
+    its.forEach((it) => {
+      const g = glyphBox(kindOf(it));
+      if (kindOf(it) === 'IMG' && it.blob) { g.textContent = ''; g.append(mediaEl('img', it.blob, { alt: '' }, w.urls)); }
+      w.body.append(el('div', { class: 'row' },
+        el('button', { type: 'button', class: 'rowmain', onclick: () => { Sfx.click(); it.kind === 'note' ? openEditor(w, it) : openViewer(w, it); } }, g, el('span', { class: 'rt' }, el('span', { class: 'nm', text: it.name }), el('span', { class: 'meta', text: fmtSize(it.size || 0) + ' · ' + new Date(it.updated).toLocaleDateString('pt-BR') }))),
+        el('div', { class: 'ract' }, btn('✎', 'Renomear', () => renameItem(it)), btn('⇄', 'Mover', () => moveItem(it)), btn('✕', 'Excluir', () => deleteItem(it), 'danger'))));
+    });
+  }
+
+  /* ----- operações ----- */
+  async function newFolder(parentId, w) {
+    const name = await ui.prompt(parentId ? 'Nome da subpasta' : 'Nome da nova pasta', ''); if (!name) return;
+    const now = Date.now(), f = { id: uid(), parentId: parentId, name: name, created: now, updated: now };
+    await Store.put('folders', f); state.folders.push(f); Sfx.ok(); refreshAll(); if (!parentId) openWin(f.id);
+  }
+  async function renameFolder(f) { const n = await ui.prompt('Novo nome da pasta', f.name); if (!n) return; f.name = n; f.updated = Date.now(); await Store.put('folders', f); refreshAll(); }
+  async function deleteFolder(f) {
+    if (!(await ui.confirm('Excluir a pasta "' + f.name + '" e tudo que há dentro dela?', { ok: 'Excluir', danger: true }))) return;
+    const ids = new Set(descendants(f.id));
+    for (const i of state.items.filter((x) => ids.has(x.folderId))) await Store.del('items', i.id);
+    for (const id of ids) await Store.del('folders', id);
+    state.items = state.items.filter((x) => !ids.has(x.folderId)); state.folders = state.folders.filter((x) => !ids.has(x.id));
+    wins.forEach((w) => { if (ids.has(w.id)) closeWin(w.id); else if (ids.has(w.dir)) { w.dir = w.id; w.view = null; } });
+    Sfx.err(); refreshAll();
+  }
+  function folderOptions(exclude, withRoot) {
+    const out = []; if (withRoot) out.push({ label: '▣ (área de trabalho)', value: null, indent: 0 });
+    (function walk(pid, d) { kidsOf(pid).forEach((f) => { if (exclude && exclude.has(f.id)) return; out.push({ label: f.name, value: f.id, indent: d }); walk(f.id, d + 1); }); })(null, 0);
+    return out;
+  }
+  async function moveFolder(f) {
+    const dest = await ui.choose('Mover "' + f.name + '" para…', folderOptions(new Set(descendants(f.id)), true)); if (dest === undefined) return;
+    f.parentId = dest; f.updated = Date.now(); await Store.put('folders', f); Sfx.ok(); refreshAll();
+  }
+  async function moveItem(it) {
+    const dest = await ui.choose('Mover "' + it.name + '" para…', folderOptions(null, false)); if (!dest) return;
+    it.folderId = dest; it.updated = Date.now(); await Store.put('items', it); Sfx.ok(); refreshAll();
+  }
+  async function renameItem(it) { const n = await ui.prompt('Novo nome', it.name); if (!n) return; it.name = n; it.updated = Date.now(); await Store.put('items', it); refreshAll(); }
+  async function deleteItem(it, w) {
+    if (!(await ui.confirm('Excluir "' + it.name + '"?', { ok: 'Excluir', danger: true }))) return;
+    await Store.del('items', it.id); state.items = state.items.filter((x) => x.id !== it.id);
+    wins.forEach((x) => { if (x.view && x.view.id === it.id) { if (x.flush) x.flush = null; x.view = null; } }); Sfx.err(); refreshAll();
+  }
+  async function newNote(w) {
+    const name = await ui.prompt('Nome da nota', 'Nova nota'); if (!name) return;
+    const now = Date.now(), it = { id: uid(), folderId: w.dir, kind: 'note', name: name, mime: 'text/plain', size: 0, text: '', created: now, updated: now };
+    await Store.put('items', it); state.items.push(it); Sfx.ok(); openEditor(w, it);
+  }
+  function pickFiles(w) {
+    const inp = el('input', { type: 'file', multiple: true, style: 'display:none' });
+    inp.addEventListener('change', async () => { if (inp.files && inp.files.length) await addFiles(w, Array.from(inp.files)); inp.remove(); });
+    document.body.append(inp); inp.click();
+  }
+  async function addFiles(w, files) {
+    let n = 0;
+    for (const file of files) {
+      try {
+        const ext = extOf(file.name), now = Date.now(); let it;
+        if (TEXT_EXT.has(ext) && file.size < 2e6) it = { id: uid(), folderId: w.dir, kind: 'note', name: file.name, mime: 'text/plain', size: file.size, text: await file.text(), created: now, updated: now };
+        else it = { id: uid(), folderId: w.dir, kind: 'file', name: file.name, mime: file.type || MIMES[ext] || 'application/octet-stream', size: file.size, blob: file, created: now, updated: now };
+        await Store.put('items', it); state.items.push(it); n++;
+      } catch (e) { ui.toast('Não foi possível salvar ' + file.name + ' (espaço cheio?).'); }
+    }
+    if (n) { Sfx.ok(); ui.toast(n + (n > 1 ? ' arquivos adicionados.' : ' arquivo adicionado.')); }
+    refreshAll();
+  }
+
+  /* ----- editor de notas ----- */
+  function openEditor(w, it) {
+    w.view = { id: it.id }; revoke(w); w.bar.textContent = ''; w.body.textContent = '';
+    const name = el('input', { type: 'text', value: it.name, 'aria-label': 'Nome da nota', maxlength: 120 });
+    const ta = el('textarea', { spellcheck: 'false', 'aria-label': 'Conteúdo da nota', placeholder: 'Escreva aqui…' }); ta.value = it.text || '';
+    const status = el('span', { class: 'meta', text: 'salvo' }); let timer = null;
+    const save = async () => { if (!state.items.includes(it)) return; it.name = name.value.trim() || 'sem nome'; it.text = ta.value; it.size = new Blob([it.text]).size; it.updated = Date.now(); try { await Store.put('items', it); status.textContent = 'salvo'; } catch (e) { status.textContent = 'erro ao salvar'; } };
+    const sched = () => { status.textContent = 'editando…'; clearTimeout(timer); timer = setTimeout(save, 500); };
+    const flush = () => { clearTimeout(timer); save(); };
+    w.flush = flush; name.addEventListener('input', sched); ta.addEventListener('input', sched);
+    w.bar.append(btn('← Voltar', 'Voltar', () => { flush(); w.flush = null; w.view = null; refreshAll(); }),
+      btn('Baixar', 'Baixar nota', () => { flush(); const n = /\.[a-z0-9]{1,5}$/i.test(it.name) ? it.name : it.name + '.txt'; saveFile(n, ta.value); }),
+      btn('Mover', 'Mover nota', () => moveItem(it)), btn('Excluir', 'Excluir nota', () => deleteItem(it), 'danger'), status);
+    w.body.append(el('div', { class: 'ed' }, name, ta)); setTimeout(() => ta.focus(), 50);
+  }
+
+  /* ----- visualizador de arquivos ----- */
+  function openViewer(w, it) {
+    w.view = { id: it.id }; revoke(w); w.bar.textContent = ''; w.body.textContent = '';
+    const back = btn('← Voltar', 'Voltar', () => { w.view = null; refreshAll(); });
+    w.bar.append(back, btn('Renomear', 'Renomear', async () => { await renameItem(it); w.view = { id: it.id }; openViewer(w, it); }), btn('Mover', 'Mover', () => moveItem(it)),
+      btn('Baixar', 'Baixar arquivo', () => saveFile(it.name, it.blob)), btn('Excluir', 'Excluir', () => deleteItem(it), 'danger'));
+    const blob = it.blob && it.blob.type === it.mime ? it.blob : new Blob([it.blob], { type: it.mime });
+    const k = kindOf(it); let media;
+    if (k === 'IMG') media = mediaEl('img', blob, { alt: it.name }, w.urls);
+    else if (k === 'VID') media = mediaEl('video', blob, { controls: true, playsinline: true }, w.urls);
+    else if (k === 'AUD') media = mediaEl('audio', blob, { controls: true }, w.urls);
+    else media = el('div', { class: 'empty', text: 'Sem pré-visualização para este tipo de arquivo.' });
+    w.body.append(el('div', { class: 'viewer' }, media, el('div', { class: 'meta', text: it.name + ' · ' + fmtSize(it.size || 0) })));
+    if (!canDownload(it.name)) w.body.append(el('div', { class: 'meta', text: 'Este formato não pode ser baixado desta janela.' }));
+  }
+
+  /* ----- abas e configurações ----- */
+  function showTab(name) {
+    document.querySelectorAll('.tabbtn').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+    $('tab-folders').classList.toggle('on', name === 'folders'); $('tab-map').classList.toggle('on', name === 'map');
+    if (name === 'map') { Eye.setMode('paused'); MapTab.show(); } else { MapTab.hide(); Eye.setMode('dim'); }
+    Sfx.tab();
+  }
+  async function settings() {
+    const c = await ui.choose('Configurações', [
+      { label: 'Recadastrar retina', value: 'reenroll' }, { label: 'Definir ou alterar PIN de emergência', value: 'pin' },
+      { label: 'Apagar todos os dados', value: 'wipe' }, { label: 'Trancar agora', value: 'lock' }]);
+    if (c === 'lock') location.reload();
+    else if (c === 'pin') { if (temp) ui.toast('No modo temporário não há PIN.'); else await Lock.savePin('Novo PIN (4 a 8 dígitos). Vazio para cancelar.'); }
+    else if (c === 'reenroll') {
+      if (temp) { ui.toast('No modo temporário não há cadastro.'); return; }
+      if (await ui.confirm('Refazer o cadastro da retina? A página será recarregada e você fará o novo cadastro com a câmera.', { ok: 'Continuar' })) { ssSet('odd_reenroll', '1'); location.reload(); }
+    } else if (c === 'wipe') {
+      if (await ui.confirm('Apagar TODAS as pastas, arquivos, pins do mapa, PIN e o cadastro da retina? Não dá para desfazer.', { ok: 'Apagar tudo', danger: true })) { await Store.clearAll(); location.reload(); }
+    }
+  }
+  function init() {
+    document.querySelectorAll('.tabbtn').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
+    $('btnSettings').addEventListener('click', () => { Sfx.click(); settings(); });
+  }
+  async function open(o) {
+    temp = !!(o && o.mode === 'temp');
+    $('modeflag').textContent = temp || !Store.persistent() ? 'TEMPORÁRIO: nada é salvo' : '';
+    await load(); await seed(); $('ws').classList.add('on'); Eye.setMode('dim'); renderIcons(true);
+    const top = kidsOf(null); for (let i = 0; i <= top.length; i++) { await sleep(i === 0 ? 350 : 280); Sfx.open(); }
+    if (wide()) for (const f of top.slice(0, 3)) { openWin(f.id); await sleep(450); }
+  }
+  return { init: init, open: open };
+})();
+
+/* ===== Aba do mapa mundial: horários em tempo real, dia/noite, fotos e vídeos por local ===== */
+const MapTab = (function () {
+  const PRESETS = [
+    ['sao-paulo', 'São Paulo', -23.55, -46.63, 'America/Sao_Paulo'], ['nova-york', 'Nova York', 40.71, -74.01, 'America/New_York'],
+    ['los-angeles', 'Los Angeles', 34.05, -118.24, 'America/Los_Angeles'], ['cidade-do-mexico', 'Cidade do México', 19.43, -99.13, 'America/Mexico_City'],
+    ['buenos-aires', 'Buenos Aires', -34.6, -58.38, 'America/Argentina/Buenos_Aires'], ['anchorage', 'Anchorage', 61.22, -149.9, 'America/Anchorage'],
+    ['honolulu', 'Honolulu', 21.31, -157.86, 'Pacific/Honolulu'], ['reykjavik', 'Reykjavik', 64.15, -21.94, 'Atlantic/Reykjavik'],
+    ['londres', 'Londres', 51.51, -0.13, 'Europe/London'], ['lisboa', 'Lisboa', 38.72, -9.14, 'Europe/Lisbon'], ['paris', 'Paris', 48.86, 2.35, 'Europe/Paris'],
+    ['berlim', 'Berlim', 52.52, 13.4, 'Europe/Berlin'], ['moscou', 'Moscou', 55.76, 37.62, 'Europe/Moscow'], ['cairo', 'Cairo', 30.04, 31.24, 'Africa/Cairo'],
+    ['lagos', 'Lagos', 6.52, 3.38, 'Africa/Lagos'], ['joanesburgo', 'Joanesburgo', -26.2, 28.05, 'Africa/Johannesburg'], ['dubai', 'Dubai', 25.2, 55.27, 'Asia/Dubai'],
+    ['mumbai', 'Mumbai', 19.08, 72.88, 'Asia/Kolkata'], ['bangkok', 'Bangkok', 13.76, 100.5, 'Asia/Bangkok'], ['pequim', 'Pequim', 39.9, 116.41, 'Asia/Shanghai'],
+    ['seul', 'Seul', 37.57, 126.98, 'Asia/Seoul'], ['toquio', 'Tóquio', 35.68, 139.69, 'Asia/Tokyo'], ['sydney', 'Sydney', -33.87, 151.21, 'Australia/Sydney'],
+    ['auckland', 'Auckland', -36.85, 174.76, 'Pacific/Auckland']
+  ].map((p) => ({ id: 'preset:' + p[0], name: p[1], lat: p[2], lon: p[3], tz: p[4], preset: true }));
+
+  let cv, ctx, wrap, W = 0, H = 0, Wm = 0, Hm = 0, k = 1, tx = 0, ty = 0, dpr = 1;
+  let worldPath = null, worldGeo = null, worldState = 'idle', night = null, nightAt = 0;
+  let pins = [], overrides = new Map(), media = [], sel = null, addMode = false, visible = false, loaded = false, tickTimer = 0, raf = 0, filter = '';
+  let panelUrls = [], clocks = [];
+  const fmts = new Map(), state = new Map();
+
+  /* ----- tempo ----- */
+  function fmt(tz) {
+    let f = fmts.get(tz);
+    if (!f) {
+      f = { t: new Intl.DateTimeFormat('pt-BR', { timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }),
+            hm: new Intl.DateTimeFormat('pt-BR', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }),
+            d: new Intl.DateTimeFormat('pt-BR', { timeZone: tz, weekday: 'short', day: '2-digit', month: 'short' }),
+            p: new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric', hourCycle: 'h23' }) };
+      fmts.set(tz, f);
+    }
+    return f;
+  }
+  function offLabel(tz, now) {
+    const parts = fmt(tz).p.formatToParts(now), g = {}; parts.forEach((p) => { g[p.type] = +p.value; });
+    const asUtc = Date.UTC(g.year, g.month - 1, g.day, g.hour % 24, g.minute, g.second), min = Math.round((asUtc - Math.floor(now.getTime() / 1000) * 1000) / 60000);
+    const a = Math.abs(min); return 'UTC' + (min < 0 ? '−' : '+') + Math.floor(a / 60) + (a % 60 ? ':' + p2(a % 60) : '');
+  }
+  function info(loc, now) {
+    if (loc.tz) {
+      try { const f = fmt(loc.tz); return { time: f.t.format(now), hm: f.hm.format(now), date: f.d.format(now), off: offLabel(loc.tz, now) }; } catch (e) { loc = Object.assign({}, loc, { tz: null }); }
+    }
+    const off = Math.round(loc.lon / 15), d = new Date(now.getTime() + off * 3600000);
+    return { time: p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()) + ':' + p2(d.getUTCSeconds()), hm: p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()),
+             date: p2(d.getUTCDate()) + '/' + p2(d.getUTCMonth() + 1), off: 'UTC' + (off < 0 ? '−' : '+') + Math.abs(off) + ' (aprox.)' };
+  }
+  function hmOf(loc, date) {
+    if (!date) return '—';
+    if (loc.tz) { try { return fmt(loc.tz).hm.format(date); } catch (e) {} }
+    const d = new Date(date.getTime() + Math.round(loc.lon / 15) * 3600000); return p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes());
+  }
+  function dayState(loc, now) { const a = Astro.altitude(loc.lat, loc.lon, now); return a > -0.833 ? 'd' : a > -6 ? 't' : 'n'; }
+  const DN = { d: 'DIA', t: 'CREPÚSCULO', n: 'NOITE' };
+
+  /* ----- dados ----- */
+  const locs = () => PRESETS.map((p) => Object.assign({}, p, { note: (overrides.get(p.id) || {}).note || '' })).concat(pins.map((p) => Object.assign({ preset: false }, p)));
+  const mediaOf = (id) => media.filter((m) => m.pinId === id).sort((a, b) => a.created - b.created);
+  async function loadData() {
+    const rows = await Store.all('pins'); pins = []; overrides = new Map();
+    rows.forEach((r) => { if (String(r.id).indexOf('preset:') === 0) overrides.set(r.id, r); else pins.push(r); });
+    media = await Store.all('media'); loaded = true;
+  }
+
+  /* ----- mapa base (Datamaps, carregado sob demanda) ----- */
+  function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error(src)); document.head.append(s); }); }
+  async function ensureWorld() {
+    if (worldState !== 'idle') return; worldState = 'loading';
+    try {
+      const base = 'https://cdnjs.cloudflare.com/ajax/libs/';
+      await loadScript(base + 'd3/3.5.17/d3.min.js'); await loadScript(base + 'topojson/1.6.9/topojson.min.js'); await loadScript(base + 'datamaps/0.5.9/datamaps.world.min.js');
+      const t = window.Datamap.prototype.worldTopo, key = Object.keys(t.objects)[0], fc = window.topojson.feature(t, t.objects[key]);
+      worldGeo = fc.features.map((f) => f.geometry).filter(Boolean); worldState = 'ready'; buildWorld();
+    } catch (e) { worldState = 'failed'; $('maperr').hidden = false; $('maperr').textContent = 'Contornos dos países indisponíveis aqui. O mapa segue com grade, fuso e locais.'; }
+  }
+  function buildWorld() {
+    if (!worldGeo || !Wm) return;
+    const p = new Path2D(), X = (lon) => ((lon + 180) / 360) * Wm, Y = (lat) => ((90 - lat) / 180) * Hm;
+    const ring = (r) => { r.forEach((c, i) => (i ? p.lineTo(X(c[0]), Y(c[1])) : p.moveTo(X(c[0]), Y(c[1])))); p.closePath(); };
+    worldGeo.forEach((g) => { if (g.type === 'Polygon') g.coordinates.forEach(ring); else if (g.type === 'MultiPolygon') g.coordinates.forEach((poly) => poly.forEach(ring)); });
+    worldPath = p;
+  }
+
+  /* ----- projeção e vista ----- */
+  const bx = (lon) => ((lon + 180) / 360) * Wm, by = (lat) => ((90 - lat) / 180) * Hm;
+  function fit() { Wm = Math.min(W, H * 2); Hm = Wm / 2; k = 1; tx = (W - Wm) / 2; ty = (H - Hm) / 2; buildWorld(); night = null; }
+  function clampView() {
+    const w = Wm * k, h = Hm * k;
+    tx = w <= W ? (W - w) / 2 : clamp(tx, W - w, 0); ty = h <= H ? (H - h) / 2 : clamp(ty, H - h, 0);
+  }
+  function zoomAt(px, py, nk) { const X = (px - tx) / k, Y = (py - ty) / k; k = clamp(nk, 1, 16); tx = px - X * k; ty = py - Y * k; clampView(); }
+  function resize() {
+    const r = wrap.getBoundingClientRect(); if (!r.width || !r.height) return;
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    if (Math.abs(r.width - W) > 1 || Math.abs(r.height - H) > 1) { W = r.width; H = r.height; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); fit(); }
+  }
+
+  /* ----- desenho ----- */
+  function updateNight(now) {
+    const t = Astro.terminator(now, 2), path = new Path2D(), line = new Path2D();
+    t.pts.forEach((p, i) => { const x = bx(p[0]), y = by(p[1]); if (i) { path.lineTo(x, y); line.lineTo(x, y); } else { path.moveTo(x, y); line.moveTo(x, y); } });
+    path.lineTo(Wm, by(t.nightPole)); path.lineTo(0, by(t.nightPole)); path.closePath(); night = { path: path, line: line, sun: t.sun }; nightAt = now.getTime();
+  }
+  function draw(ts) {
+    if (!visible) return; raf = requestAnimationFrame(draw);
+    const now = new Date(); if (!night || now.getTime() - nightAt > 30000) updateNight(now);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    ctx.save(); ctx.translate(tx, ty); ctx.scale(k, k);
+    ctx.fillStyle = '#010d08'; ctx.fillRect(0, 0, Wm, Hm);
+    ctx.lineWidth = 1 / k; ctx.strokeStyle = 'rgba(0,255,156,.11)'; ctx.beginPath();
+    for (let lo = -180; lo <= 180; lo += 30) { ctx.moveTo(bx(lo), 0); ctx.lineTo(bx(lo), Hm); }
+    for (let la = -60; la <= 60; la += 30) { ctx.moveTo(0, by(la)); ctx.lineTo(Wm, by(la)); }
+    ctx.stroke();
+    if (worldPath) { ctx.fillStyle = 'rgba(0,255,156,.17)'; ctx.fill(worldPath); ctx.strokeStyle = 'rgba(0,255,156,.7)'; ctx.lineWidth = 0.8 / k; ctx.stroke(worldPath); }
+    ctx.fillStyle = 'rgba(0,8,26,.58)'; ctx.fill(night.path);
+    ctx.strokeStyle = 'rgba(255,176,32,.6)'; ctx.lineWidth = 1 / k; ctx.stroke(night.line);
+    const sx = bx(night.sun.lon), sy = by(night.sun.lat); ctx.fillStyle = '#ffd25a'; ctx.beginPath(); ctx.arc(sx, sy, 5 / k, 0, 7); ctx.fill();
+    ctx.restore();
+    ctx.font = '11px "Share Tech Mono","Courier New",monospace'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+    const pulse = (Math.sin(ts / 300) + 1) / 2, list = locs();
+    for (let i = 0; i < list.length; i++) {
+      const L = list[i], x = tx + k * bx(L.lon), y = ty + k * by(L.lat); if (x < -40 || y < -20 || x > W + 40 || y > H + 20) continue;
+      const st = state.get(L.id) || 'd', col = st === 'd' ? '#ffd25a' : st === 't' ? '#ff8a5a' : '#5aa9ff', on = sel === L.id, mc = mediaOf(L.id).length;
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, on ? 5.5 : 3.8, 0, 7); ctx.fill();
+      if (on) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, 9 + pulse * 6, 0, 7); ctx.stroke(); }
+      if (mc) { ctx.fillStyle = '#00ff9c'; ctx.fillRect(x + 5, y - 9, 5, 5); }
+      if (k >= 2 || on) {
+        const inf = info(L, now), txt = L.name + ' ' + inf.hm; ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(x + 8, y - 8, ctx.measureText(txt).width + 6, 16);
+        ctx.fillStyle = '#eafff6'; ctx.fillText(txt, x + 11, y);
+      }
+    }
+  }
+
+  /* ----- gestos ----- */
+  function bindGestures() {
+    const ptrs = new Map(); let drag = null, pinch = null, moved = false, downT = 0;
+    cv.addEventListener('pointerdown', (e) => {
+      cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+      if (ptrs.size === 1) { drag = { x: e.offsetX, y: e.offsetY, tx: tx, ty: ty }; moved = false; downT = performance.now(); }
+      else if (ptrs.size === 2) { const a = Array.from(ptrs.values()); pinch = { d: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1, k: k }; }
+    });
+    cv.addEventListener('pointermove', (e) => {
+      if (!ptrs.has(e.pointerId)) return; ptrs.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+      if (ptrs.size === 2 && pinch) { const a = Array.from(ptrs.values()); zoomAt((a[0].x + a[1].x) / 2, (a[0].y + a[1].y) / 2, pinch.k * Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) / pinch.d); moved = true; }
+      else if (drag && ptrs.size === 1) { const dx = e.offsetX - drag.x, dy = e.offsetY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 6) moved = true; tx = drag.tx + dx; ty = drag.ty + dy; clampView(); }
+    });
+    const up = (e) => {
+      const single = ptrs.size === 1; ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null;
+      if (single && !moved && performance.now() - downT < 600) tap(e.offsetX, e.offsetY);
+      drag = null; if (ptrs.size === 1) { const p = Array.from(ptrs.values())[0]; drag = { x: p.x, y: p.y, tx: tx, ty: ty }; moved = true; }
+    };
+    cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', (e) => { ptrs.delete(e.pointerId); pinch = null; drag = null; });
+    cv.addEventListener('wheel', (e) => { e.preventDefault(); zoomAt(e.offsetX, e.offsetY, k * (e.deltaY < 0 ? 1.25 : 0.8)); }, { passive: false });
+    $('zin').addEventListener('click', () => { zoomAt(W / 2, H / 2, k * 1.6); Sfx.click(); });
+    $('zout').addEventListener('click', () => { zoomAt(W / 2, H / 2, k / 1.6); Sfx.click(); });
+    $('zreset').addEventListener('click', () => { fit(); Sfx.click(); });
+  }
+  function tap(px, py) {
+    if (addMode) {
+      const lon = ((px - tx) / k / Wm) * 360 - 180, lat = 90 - ((py - ty) / k / Hm) * 180;
+      if (lon < -180 || lon > 180 || lat < -90 || lat > 90) return; addMode = false; $('maphint').hidden = true; createPin(lat, lon); return;
+    }
+    let best = null, bd = 26; locs().forEach((L) => { const d = Math.hypot(tx + k * bx(L.lon) - px, ty + k * by(L.lat) - py); if (d < bd) { bd = d; best = L; } });
+    if (best) select(best.id); 
+  }
+
+  /* ----- painel ----- */
+  const revokePanel = () => { panelUrls.forEach((u) => URL.revokeObjectURL(u)); panelUrls = []; };
+  const getLoc = (id) => locs().find((l) => l.id === id);
+  function select(id) { sel = id; Sfx.ping(); const L = getLoc(id); if (L) { const px = tx + k * bx(L.lon), py = ty + k * by(L.lat); if (px < 30 || py < 30 || px > W - 30 || py > H - 30) { tx += W / 2 - px; ty += H / 2 - py; clampView(); } } renderPanel(); }
+  function renderPanel() {
+    const P = $('mappanel'); revokePanel(); clocks = []; P.textContent = '';
+    const L = sel && getLoc(sel); if (!L) { sel = null; return renderList(P); } renderDetail(P, L);
+  }
+  function renderList(P) {
+    const q = el('input', { type: 'search', placeholder: 'Buscar local…', value: filter, 'aria-label': 'Buscar local' });
+    q.addEventListener('input', () => { filter = q.value; renderList2(); });
+    P.append(el('div', { class: 'phead' }, el('h2', { text: 'LOCAIS' }), el('button', { type: 'button', class: 'sm', text: '+ Pin', onclick: () => { addMode = true; $('maphint').hidden = false; $('maphint').textContent = 'Toque no mapa para posicionar o novo pin.'; Sfx.click(); } })), q, el('div', { id: 'loclist' }));
+    renderList2();
+  }
+  function renderList2() {
+    const box = $('loclist'); if (!box) return; box.textContent = ''; clocks = []; const now = new Date(), f = filter.trim().toLowerCase();
+    locs().filter((L) => !f || L.name.toLowerCase().indexOf(f) >= 0).forEach((L) => {
+      const tm = el('span', { class: 'tm' }), dn = el('span', { class: 'dn' }), mc = mediaOf(L.id).length;
+      clocks.push({ L: L, tm: tm, dn: dn }); box.append(el('button', { type: 'button', class: 'loc', onclick: () => select(L.id) }, dn, el('span', { class: 'ln1', text: L.name + (mc ? '  ▣' + mc : '') }), tm));
+    });
+    tick();
+  }
+  function renderDetail(P, L) {
+    const tm = el('div', { class: 'bigclock' }), kv = el('div', { class: 'kv' }), sun = el('div', { class: 'kv' });
+    P.append(el('div', { class: 'phead' }, el('button', { type: 'button', class: 'sm', text: '← Locais', onclick: () => { sel = null; renderPanel(); } }), el('h2', { text: L.name })), tm, kv, sun);
+    clocks.push({ L: L, big: tm, kv: kv, sun: sun });
+    const note = el('textarea', { rows: '3', placeholder: 'Anotações sobre este lugar…', 'aria-label': 'Anotações' }); note.value = L.note || ''; let nt = null;
+    note.addEventListener('input', () => { clearTimeout(nt); nt = setTimeout(async () => { if (L.preset) { const o = { id: L.id, note: note.value }; overrides.set(L.id, o); await Store.put('pins', o); } else { const p = pins.find((x) => x.id === L.id); if (p) { p.note = note.value; await Store.put('pins', p); } } }, 500); });
+    P.append(el('div', { class: 'sect', text: 'ANOTAÇÕES' }), note);
+    const list = mediaOf(L.id), gal = el('div', { class: 'gal' });
+    list.forEach((m, i) => {
+      const inner = m.kind === 'video' ? [mediaEl('video', m.blob, { muted: true, preload: 'metadata', playsinline: true }, panelUrls), el('span', { class: 'pb', text: '▶' })] : [mediaEl('img', m.blob, { alt: m.name }, panelUrls)];
+      gal.append(el('button', { type: 'button', class: 'th', 'aria-label': m.name, onclick: () => lightbox(list, i) }, inner));
+    });
+    P.append(el('div', { class: 'sect', text: 'FOTOS E VÍDEOS (' + list.length + ')' }), gal,
+      el('div', { class: 'phead' }, el('button', { type: 'button', class: 'pri', text: '+ Foto / vídeo', onclick: () => pickMedia(L) })));
+    if (!L.preset) P.append(el('div', { class: 'phead' },
+      el('button', { type: 'button', class: 'sm', text: 'Renomear', onclick: async () => { const n = await ui.prompt('Nome do pin', L.name); if (!n) return; const p = pins.find((x) => x.id === L.id); p.name = n; await Store.put('pins', p); renderPanel(); } }),
+      el('button', { type: 'button', class: 'sm', text: 'Fuso', onclick: () => pickZone(L) }),
+      el('button', { type: 'button', class: 'sm danger', text: 'Excluir', onclick: async () => { if (!(await ui.confirm('Excluir o pin "' + L.name + '" e suas fotos e vídeos?', { ok: 'Excluir', danger: true }))) return; for (const m of mediaOf(L.id)) await Store.del('media', m.id); media = media.filter((m) => m.pinId !== L.id); await Store.del('pins', L.id); pins = pins.filter((p) => p.id !== L.id); sel = null; Sfx.err(); renderPanel(); } })));
+    tick();
+  }
+  function pickMedia(L) {
+    const inp = el('input', { type: 'file', accept: 'image/*,video/*', multiple: true, style: 'display:none' });
+    inp.addEventListener('change', async () => {
+      let n = 0;
+      for (const f of Array.from(inp.files || [])) {
+        try { const m = { id: uid(), pinId: L.id, kind: (f.type || '').indexOf('video/') === 0 ? 'video' : 'photo', name: f.name, mime: f.type || MIMES[extOf(f.name)] || '', size: f.size, blob: f, created: Date.now() }; await Store.put('media', m); media.push(m); n++; }
+        catch (e) { ui.toast('Não foi possível salvar ' + f.name); }
+      }
+      inp.remove(); if (n) { Sfx.ok(); renderPanel(); }
+    });
+    document.body.append(inp); inp.click();
+  }
+  function zoneList() { try { if (Intl.supportedValuesOf) return Intl.supportedValuesOf('timeZone'); } catch (e) {} return PRESETS.map((p) => p.tz); }
+  function zoneSelect(cur) {
+    const s = el('select', { 'aria-label': 'Fuso horário' }); s.append(el('option', { value: '', text: 'Automático (aproximado pela longitude)' }));
+    zoneList().forEach((z) => s.append(el('option', { value: z, text: z }))); s.value = cur || ''; return s;
+  }
+  async function pickZone(L) {
+    const s = zoneSelect(L.tz), r = await ui.modal({ title: 'Fuso horário de "' + L.name + '"', body: s, dismiss: undefined, buttons: [{ label: 'Cancelar', value: undefined, cls: 'quiet' }, { label: 'Salvar', cls: 'pri', onClick: () => ({ z: s.value }) }] });
+    if (!r) return; const p = pins.find((x) => x.id === L.id); p.tz = r.z || null; await Store.put('pins', p); renderPanel();
+  }
+  async function createPin(lat, lon) {
+    const name = el('input', { type: 'text', placeholder: 'Nome do pin', maxlength: 60, 'aria-label': 'Nome do pin' }), s = zoneSelect('');
+    const body = el('div', { class: 'mlist' }, name, s, el('div', { class: 'meta', text: 'Lat ' + lat.toFixed(2) + ', Lon ' + lon.toFixed(2) }));
+    const r = await ui.modal({ title: 'Novo pin', body: body, dismiss: undefined, buttons: [{ label: 'Cancelar', value: undefined, cls: 'quiet' }, { label: 'Criar', cls: 'pri', onClick: () => (name.value.trim() ? { n: name.value.trim(), z: s.value } : false) }] });
+    if (!r) return;
+    const p = { id: 'pin:' + uid(), name: r.n, lat: lat, lon: lon, tz: r.z || null, note: '', created: Date.now() };
+    await Store.put('pins', p); pins.push(p); Sfx.ok(); select(p.id);
+  }
+
+  /* ----- visualizador de fotos e vídeos ----- */
+  function lightbox(list, i0) {
+    const box = $('lightbox'); let i = i0, urls = []; box.hidden = false;
+    const close = () => { urls.forEach((u) => URL.revokeObjectURL(u)); urls = []; box.hidden = true; box.textContent = ''; document.removeEventListener('keydown', onKey); };
+    const onKey = (e) => { if (e.key === 'Escape') close(); else if (e.key === 'ArrowRight') go(1); else if (e.key === 'ArrowLeft') go(-1); };
+    function go(d) { i = (i + d + list.length) % list.length; show(); }
+    function show() {
+      urls.forEach((u) => URL.revokeObjectURL(u)); urls = []; const m = list[i]; box.textContent = '';
+      const media2 = m.kind === 'video' ? mediaEl('video', m.blob, { controls: true, playsinline: true }, urls) : mediaEl('img', m.blob, { alt: m.name }, urls);
+      box.append(el('div', { class: 'lbtop' }, el('button', { type: 'button', class: 'sm', text: '✕ Fechar', onclick: close }),
+        list.length > 1 ? el('button', { type: 'button', class: 'sm', text: '‹', 'aria-label': 'Anterior', onclick: () => go(-1) }) : null, list.length > 1 ? el('button', { type: 'button', class: 'sm', text: '›', 'aria-label': 'Próximo', onclick: () => go(1) }) : null,
+        el('span', { class: 'meta', text: m.name + ' (' + (i + 1) + '/' + list.length + ')' }), el('span', { class: 'grow' }),
+        canDownload(m.name) ? el('button', { type: 'button', class: 'sm', text: 'Baixar', onclick: () => saveFile(m.name, m.blob) }) : null,
+        el('button', { type: 'button', class: 'sm danger', text: 'Excluir', onclick: async () => { if (!(await ui.confirm('Excluir "' + m.name + '"?', { ok: 'Excluir', danger: true }))) return; await Store.del('media', m.id); media = media.filter((x) => x.id !== m.id); close(); Sfx.err(); renderPanel(); } })),
+        el('div', { class: 'lbmedia' }, media2));
+    }
+    document.addEventListener('keydown', onKey); show();
+  }
+
+  /* ----- relógio (1 s) ----- */
+  function tick() {
+    if (!visible) return; const now = new Date();
+    if (!tick.at || now.getTime() - tick.at > 20000) { tick.at = now.getTime(); locs().forEach((L) => state.set(L.id, dayState(L, now))); }
+    clocks.forEach((c) => {
+      const inf = info(c.L, now), st = state.get(c.L.id) || dayState(c.L, now);
+      if (c.tm) { c.tm.textContent = inf.hm; c.dn.className = 'dn ' + st; }
+      if (c.big) {
+        c.big.textContent = inf.time; c.kv.textContent = '';
+        const rows = [['Data', inf.date], ['Fuso', inf.off], ['Agora', DN[st]], ['Coordenadas', c.L.lat.toFixed(2) + ', ' + c.L.lon.toFixed(2)]];
+        rows.forEach((r) => c.kv.append(el('div', {}, r[0] + ': ', el('b', { text: r[1] }))));
+        const s = Astro.sunTimes(c.L.lat, c.L.lon, now); c.sun.textContent = '';
+        c.sun.append(el('div', {}, s.polar ? (s.polar === 'day' ? 'Sol da meia-noite: sem pôr do sol hoje' : 'Noite polar: sem nascer do sol hoje') : ['Nascer: ', el('b', { text: hmOf(c.L, s.rise) }), '   Pôr: ', el('b', { text: hmOf(c.L, s.set) })]));
+      }
+    });
+  }
+
+  /* ----- ciclo de vida ----- */
+  function init() {
+    cv = $('mapcv'); ctx = cv.getContext('2d'); wrap = $('mapwrap'); bindGestures();
+    if (window.ResizeObserver) new ResizeObserver(() => { if (visible) resize(); }).observe(wrap); window.addEventListener('resize', () => { if (visible) resize(); });
+  }
+  async function show() {
+    visible = true; if (!loaded) await loadData();
+    resize(); locs().forEach((L) => state.set(L.id, dayState(L, new Date()))); renderPanel(); ensureWorld();
+    clearInterval(tickTimer); tickTimer = setInterval(tick, 1000); cancelAnimationFrame(raf); raf = requestAnimationFrame(draw);
+  }
+  function hide() { visible = false; clearInterval(tickTimer); cancelAnimationFrame(raf); }
+  return { init: init, show: show, hide: hide };
+})();
+
+/* ===== início ===== */
+(async function main() {
+  const fontsReady = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
+  await Promise.race([fontsReady, sleep(1200)]);
+  WS.init(); MapTab.init();
+  const mute = $('mute');
+  const upd = () => { mute.textContent = Sfx.isMuted() ? '♪ ✕' : '♪'; mute.setAttribute('aria-pressed', String(Sfx.isMuted())); mute.setAttribute('aria-label', Sfx.isMuted() ? 'Ligar som' : 'Desligar som'); };
+  mute.addEventListener('click', () => { Sfx.init(); Sfx.setMuted(!Sfx.isMuted()); upd(); if (!Sfx.isMuted()) Sfx.click(); });
+  upd();
+  $('startBtn').addEventListener('click', async () => {
+    Sfx.init(); Sfx.boot(); $('startBox').hidden = true; $('scanBox').hidden = false;
+    const force = ssGet('odd_reenroll') === '1'; if (force) ssDel('odd_reenroll');
+    const res = await Lock.start({ forceEnroll: force });
+    $('lock').style.display = 'none';       // tela preta (< 1 s)
+    await sleep(650);
+    await Eye.run({});
+    Eye.hideWelcome();
+    await WS.open(res);
+  });
+})();
+
+})();
+</script>
+</body>
+</html>
